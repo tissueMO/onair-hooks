@@ -1,0 +1,14 @@
+{
+  "name": "onair-hooks-discord-extension",
+  "version": "1.0.0",
+  "author": "tissueMO",
+  "private": true,
+  "dependencies": {
+    "axios": "^0.27.2",
+    "discord.js": "^13.7.0"
+  },
+  "scripts": {
+    "dev": "yarn && node index.js",
+    "build": " tar --exclude 'node_modules' --exclude '.env*' --exclude 'config.example.js' --exclude '.gitignore' --exclude 'docker-compose.yml' -cvf ../onair-hooks-discord-extension.tar ."
+  }
+}
