@@ -1,4 +1,4 @@
-const { Client, Intents } = require('discord.js');
+const { Client, Intents, VoiceState } = require('discord.js');
 const axios = require('axios').default;
 const client = new Client({ intents: Object.keys(Intents.FLAGS) });
 const config = require('./config');
@@ -18,9 +18,9 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   const guildName = newState.guild.name;
   const userId = newState.id;
   const username = (await newState.guild.members.fetch(newState.id)).user.username;
-  const state = newState.selfMute ? 'off' : 'on';
+  const state = getChangedState(oldState, newState);
 
-  if (oldState.selfMute !== newState.selfMute) {
+  if (state) {
     console.info(`[${guildName}]:[${username}] マイク ${state}`);
     const results = await Promise.allSettled(
       config.hooks
@@ -30,6 +30,42 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     console.info(`${results.length}件のフック処理が実行されました。(成功=${results.filter(r => r.status === 'fulfilled').length}, 失敗=${results.filter(r => r.status === 'rejected').length})`);
   }
 });
+
+/**
+ * マイクの使用状態が変更された場合に変更後の使用状態文字列を返します。
+ * @param {VoiceState} oldState
+ * @param {VoiceState} newState
+ * @returns {'on' | 'off' | null}
+ */
+const getChangedState = (oldState, newState) => {
+  const isEntry = oldState.channelId === null && newState.channelId !== null;
+  const isExit = oldState.channelId !== null && newState.channelId === null;
+
+  // ボイスチャンネルの入室 (ミュート状態)
+  if (isEntry && newState.selfMute) {
+    return null;
+  }
+  // ボイスチャンネルの入室 (非ミュート状態)
+  if (isEntry && !newState.selfMute) {
+    return 'on';
+  }
+
+  // ボイスチャンネルの退室 (ミュート状態)
+  if (isExit && newState.selfMute) {
+    return null;
+  }
+  // ボイスチャンネルの退室 (非ミュート状態)
+  if (isExit && !newState.selfMute) {
+    return 'off';
+  }
+
+  // ミュート状態の変更
+  if (oldState.selfMute !== newState.selfMute) {
+    return newState.selfMute ? 'off' : 'on';
+  }
+
+  return null;
+};
 
 // プロセス終了時にログアウト
 process
