@@ -112,6 +112,7 @@ namespace App
         /// </summary>
         private void exitButtonClicked(object sender, EventArgs e)
         {
+            this.tasktrayIcon.Visible = false;
             Application.Exit();
         }
 

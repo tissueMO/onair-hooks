@@ -43,8 +43,8 @@ namespace App
             this.label4 = new System.Windows.Forms.Label();
             this.processFileNameText = new System.Windows.Forms.TextBox();
             this.processArgumentsText = new System.Windows.Forms.TextBox();
-            this.addOrUpdateButton = new System.Windows.Forms.Button();
-            this.deleteButton = new System.Windows.Forms.Button();
+            this.hooksAddOrUpdateButton = new System.Windows.Forms.Button();
+            this.hooksDeleteButton = new System.Windows.Forms.Button();
             this.cancelButton = new System.Windows.Forms.Button();
             this.okButton = new System.Windows.Forms.Button();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
@@ -54,11 +54,19 @@ namespace App
             this.label1 = new System.Windows.Forms.Label();
             this.groupBox4 = new System.Windows.Forms.GroupBox();
             this.registerStartupButton = new System.Windows.Forms.Button();
+            this.groupBox5 = new System.Windows.Forms.GroupBox();
+            this.label5 = new System.Windows.Forms.Label();
+            this.ignoreProcessName = new System.Windows.Forms.TextBox();
+            this.ignoreProcesses = new System.Windows.Forms.ListView();
+            this.columnHeader6 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.ignoreProcessesDeleteButton = new System.Windows.Forms.Button();
+            this.ignoreProcessesAddOrUpdateButton = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.sequentialInterval)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
             this.groupBox4.SuspendLayout();
+            this.groupBox5.SuspendLayout();
             this.SuspendLayout();
             // 
             // label2
@@ -209,36 +217,36 @@ namespace App
             this.processArgumentsText.Size = new System.Drawing.Size(323, 23);
             this.processArgumentsText.TabIndex = 4;
             // 
-            // addOrUpdateButton
+            // hooksAddOrUpdateButton
             // 
-            this.addOrUpdateButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.addOrUpdateButton.Location = new System.Drawing.Point(350, 233);
-            this.addOrUpdateButton.Name = "addOrUpdateButton";
-            this.addOrUpdateButton.Size = new System.Drawing.Size(100, 28);
-            this.addOrUpdateButton.TabIndex = 8;
-            this.addOrUpdateButton.Text = "追加(&A)";
-            this.addOrUpdateButton.UseVisualStyleBackColor = true;
-            this.addOrUpdateButton.Click += new System.EventHandler(this.addOrUpdateButtonClicked);
+            this.hooksAddOrUpdateButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.hooksAddOrUpdateButton.Location = new System.Drawing.Point(350, 233);
+            this.hooksAddOrUpdateButton.Name = "hooksAddOrUpdateButton";
+            this.hooksAddOrUpdateButton.Size = new System.Drawing.Size(100, 28);
+            this.hooksAddOrUpdateButton.TabIndex = 8;
+            this.hooksAddOrUpdateButton.Text = "追加(&A)";
+            this.hooksAddOrUpdateButton.UseVisualStyleBackColor = true;
+            this.hooksAddOrUpdateButton.Click += new System.EventHandler(this.addOrUpdateButtonClicked);
             // 
-            // deleteButton
+            // hooksDeleteButton
             // 
-            this.deleteButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.deleteButton.Location = new System.Drawing.Point(244, 233);
-            this.deleteButton.Name = "deleteButton";
-            this.deleteButton.Size = new System.Drawing.Size(100, 28);
-            this.deleteButton.TabIndex = 7;
-            this.deleteButton.Text = "削除(&D)";
-            this.deleteButton.UseVisualStyleBackColor = true;
-            this.deleteButton.Click += new System.EventHandler(this.deleteButtonClicked);
+            this.hooksDeleteButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.hooksDeleteButton.Location = new System.Drawing.Point(244, 233);
+            this.hooksDeleteButton.Name = "hooksDeleteButton";
+            this.hooksDeleteButton.Size = new System.Drawing.Size(100, 28);
+            this.hooksDeleteButton.TabIndex = 7;
+            this.hooksDeleteButton.Text = "削除(&D)";
+            this.hooksDeleteButton.UseVisualStyleBackColor = true;
+            this.hooksDeleteButton.Click += new System.EventHandler(this.deleteButtonClicked);
             // 
             // cancelButton
             // 
             this.cancelButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.cancelButton.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.cancelButton.Location = new System.Drawing.Point(376, 513);
+            this.cancelButton.Location = new System.Drawing.Point(376, 649);
             this.cancelButton.Name = "cancelButton";
             this.cancelButton.Size = new System.Drawing.Size(100, 28);
-            this.cancelButton.TabIndex = 5;
+            this.cancelButton.TabIndex = 6;
             this.cancelButton.Text = "キャンセル";
             this.cancelButton.UseVisualStyleBackColor = true;
             this.cancelButton.Click += new System.EventHandler(this.cancelButtonClicked);
@@ -246,10 +254,10 @@ namespace App
             // okButton
             // 
             this.okButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.okButton.Location = new System.Drawing.Point(270, 513);
+            this.okButton.Location = new System.Drawing.Point(270, 649);
             this.okButton.Name = "okButton";
             this.okButton.Size = new System.Drawing.Size(100, 28);
-            this.okButton.TabIndex = 4;
+            this.okButton.TabIndex = 5;
             this.okButton.Text = "OK";
             this.okButton.UseVisualStyleBackColor = true;
             this.okButton.Click += new System.EventHandler(this.okButtonClicked);
@@ -261,9 +269,9 @@ namespace App
             this.groupBox1.Controls.Add(this.hooks);
             this.groupBox1.Controls.Add(this.startingHook);
             this.groupBox1.Controls.Add(this.endingHook);
-            this.groupBox1.Controls.Add(this.deleteButton);
+            this.groupBox1.Controls.Add(this.hooksDeleteButton);
             this.groupBox1.Controls.Add(this.label3);
-            this.groupBox1.Controls.Add(this.addOrUpdateButton);
+            this.groupBox1.Controls.Add(this.hooksAddOrUpdateButton);
             this.groupBox1.Controls.Add(this.label4);
             this.groupBox1.Controls.Add(this.processArgumentsText);
             this.groupBox1.Controls.Add(this.processFileNameText);
@@ -282,10 +290,10 @@ namespace App
             this.groupBox2.Controls.Add(this.enabledSequential);
             this.groupBox2.Controls.Add(this.label2);
             this.groupBox2.Controls.Add(this.sequentialInterval);
-            this.groupBox2.Location = new System.Drawing.Point(12, 360);
+            this.groupBox2.Location = new System.Drawing.Point(12, 503);
             this.groupBox2.Name = "groupBox2";
             this.groupBox2.Size = new System.Drawing.Size(464, 60);
-            this.groupBox2.TabIndex = 2;
+            this.groupBox2.TabIndex = 3;
             this.groupBox2.TabStop = false;
             this.groupBox2.Text = "同時多重フックの抑止";
             // 
@@ -327,10 +335,10 @@ namespace App
             this.groupBox4.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox4.Controls.Add(this.registerStartupButton);
-            this.groupBox4.Location = new System.Drawing.Point(12, 426);
+            this.groupBox4.Location = new System.Drawing.Point(12, 569);
             this.groupBox4.Name = "groupBox4";
             this.groupBox4.Size = new System.Drawing.Size(464, 65);
-            this.groupBox4.TabIndex = 3;
+            this.groupBox4.TabIndex = 4;
             this.groupBox4.TabStop = false;
             this.groupBox4.Text = "スタートアップへの登録";
             // 
@@ -345,13 +353,97 @@ namespace App
             this.registerStartupButton.UseVisualStyleBackColor = true;
             this.registerStartupButton.Click += new System.EventHandler(this.registerStartupButtonClicked);
             // 
+            // groupBox5
+            // 
+            this.groupBox5.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBox5.Controls.Add(this.label5);
+            this.groupBox5.Controls.Add(this.ignoreProcessName);
+            this.groupBox5.Controls.Add(this.ignoreProcesses);
+            this.groupBox5.Controls.Add(this.ignoreProcessesDeleteButton);
+            this.groupBox5.Controls.Add(this.ignoreProcessesAddOrUpdateButton);
+            this.groupBox5.Location = new System.Drawing.Point(12, 360);
+            this.groupBox5.Name = "groupBox5";
+            this.groupBox5.Size = new System.Drawing.Size(464, 137);
+            this.groupBox5.TabIndex = 2;
+            this.groupBox5.TabStop = false;
+            this.groupBox5.Text = "除外するプロセス";
+            // 
+            // label5
+            // 
+            this.label5.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(21, 100);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(61, 15);
+            this.label5.TabIndex = 9;
+            this.label5.Text = "プロセス名:";
+            // 
+            // ignoreProcessName
+            // 
+            this.ignoreProcessName.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.ignoreProcessName.Location = new System.Drawing.Point(88, 97);
+            this.ignoreProcessName.Name = "ignoreProcessName";
+            this.ignoreProcessName.Size = new System.Drawing.Size(139, 23);
+            this.ignoreProcessName.TabIndex = 9;
+            // 
+            // ignoreProcesses
+            // 
+            this.ignoreProcesses.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.ignoreProcesses.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
+            this.columnHeader6});
+            this.ignoreProcesses.FullRowSelect = true;
+            this.ignoreProcesses.GridLines = true;
+            this.ignoreProcesses.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.Nonclickable;
+            this.ignoreProcesses.HideSelection = false;
+            this.ignoreProcesses.Location = new System.Drawing.Point(13, 22);
+            this.ignoreProcesses.MultiSelect = false;
+            this.ignoreProcesses.Name = "ignoreProcesses";
+            this.ignoreProcesses.Size = new System.Drawing.Size(437, 64);
+            this.ignoreProcesses.TabIndex = 0;
+            this.ignoreProcesses.UseCompatibleStateImageBehavior = false;
+            this.ignoreProcesses.View = System.Windows.Forms.View.List;
+            this.ignoreProcesses.SelectedIndexChanged += new System.EventHandler(this.ignoreProcessesSelectedIndexChanged);
+            // 
+            // columnHeader6
+            // 
+            this.columnHeader6.Text = "プロセス名";
+            this.columnHeader6.Width = 200;
+            // 
+            // ignoreProcessesDeleteButton
+            // 
+            this.ignoreProcessesDeleteButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.ignoreProcessesDeleteButton.Location = new System.Drawing.Point(244, 94);
+            this.ignoreProcessesDeleteButton.Name = "ignoreProcessesDeleteButton";
+            this.ignoreProcessesDeleteButton.Size = new System.Drawing.Size(100, 28);
+            this.ignoreProcessesDeleteButton.TabIndex = 1;
+            this.ignoreProcessesDeleteButton.Text = "削除(&D)";
+            this.ignoreProcessesDeleteButton.UseVisualStyleBackColor = true;
+            this.ignoreProcessesDeleteButton.Click += new System.EventHandler(this.ignoreProcessesDeleteButtonClicked);
+            // 
+            // ignoreProcessesAddOrUpdateButton
+            // 
+            this.ignoreProcessesAddOrUpdateButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.ignoreProcessesAddOrUpdateButton.Location = new System.Drawing.Point(350, 94);
+            this.ignoreProcessesAddOrUpdateButton.Name = "ignoreProcessesAddOrUpdateButton";
+            this.ignoreProcessesAddOrUpdateButton.Size = new System.Drawing.Size(100, 28);
+            this.ignoreProcessesAddOrUpdateButton.TabIndex = 2;
+            this.ignoreProcessesAddOrUpdateButton.Text = "追加(&A)";
+            this.ignoreProcessesAddOrUpdateButton.UseVisualStyleBackColor = true;
+            this.ignoreProcessesAddOrUpdateButton.Click += new System.EventHandler(this.ignoreProcessesAddOrUpdateButtonClicked);
+            // 
             // Preferences
             // 
             this.AcceptButton = this.okButton;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.cancelButton;
-            this.ClientSize = new System.Drawing.Size(488, 550);
+            this.ClientSize = new System.Drawing.Size(488, 686);
+            this.Controls.Add(this.groupBox5);
             this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
@@ -375,6 +467,8 @@ namespace App
             this.groupBox3.ResumeLayout(false);
             this.groupBox3.PerformLayout();
             this.groupBox4.ResumeLayout(false);
+            this.groupBox5.ResumeLayout(false);
+            this.groupBox5.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -394,8 +488,8 @@ namespace App
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.TextBox processFileNameText;
         private System.Windows.Forms.TextBox processArgumentsText;
-        private System.Windows.Forms.Button addOrUpdateButton;
-        private System.Windows.Forms.Button deleteButton;
+        private System.Windows.Forms.Button hooksAddOrUpdateButton;
+        private System.Windows.Forms.Button hooksDeleteButton;
         private System.Windows.Forms.Button cancelButton;
         private System.Windows.Forms.Button okButton;
         private System.Windows.Forms.GroupBox groupBox1;
@@ -405,5 +499,12 @@ namespace App
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.GroupBox groupBox4;
         private System.Windows.Forms.Button registerStartupButton;
+        private System.Windows.Forms.GroupBox groupBox5;
+        private System.Windows.Forms.ListView ignoreProcesses;
+        private System.Windows.Forms.ColumnHeader columnHeader6;
+        private System.Windows.Forms.Button ignoreProcessesDeleteButton;
+        private System.Windows.Forms.Button ignoreProcessesAddOrUpdateButton;
+        private System.Windows.Forms.Label label5;
+        private System.Windows.Forms.TextBox ignoreProcessName;
     }
 }

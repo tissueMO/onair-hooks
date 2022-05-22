@@ -69,5 +69,16 @@ namespace App.Properties {
                 this["TargetAudioDeviceName"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        public global::System.Collections.Specialized.StringCollection IgnoreProcesses {
+            get {
+                return ((global::System.Collections.Specialized.StringCollection)(this["IgnoreProcesses"]));
+            }
+            set {
+                this["IgnoreProcesses"] = value;
+            }
+        }
     }
 }
