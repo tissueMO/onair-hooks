@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
 using NAudio.CoreAudioApi;
@@ -43,6 +44,10 @@ namespace App
                 var device = this.createDevice();
                 var state = Enumerable.Range(0, device.AudioSessionManager.Sessions.Count)
                     .ToList()
+                    .Where(i => {
+                        var processName = Process.GetProcessById((int) device.AudioSessionManager.Sessions[i].GetProcessID)?.ProcessName ?? "";
+                        return (Properties.Settings.Default.IgnoreProcesses ?? new StringCollection()).Cast<string>().All(p => p != processName);
+                    })
                     .Any(i => device.AudioSessionManager.Sessions[i].State == AudioSessionState.AudioSessionStateActive);
                 this.lastState = state;
                 return state;

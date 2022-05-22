@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Specialized;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace App
@@ -12,6 +14,11 @@ namespace App
         /// 選択中のフックインデックス
         /// </summary>
         private int selectedHookIndex = -1;
+
+        /// <summary>
+        /// 選択中の無視プロセス名インデックス
+        /// </summary>
+        private int selectedIgnoreProcessIndex = -1;
 
         /// <summary>
         /// コントロールの状態に即したフック種別
@@ -56,27 +63,37 @@ namespace App
             });
             this.hooks.EndUpdate();
 
+            // 無視プロセス設定
+            this.ignoreProcesses.BeginUpdate();
+            this.ignoreProcesses.Items.Clear();
+            Properties.Settings.Default.IgnoreProcesses?.Cast<string>().ToList()?.ForEach(p =>
+            {
+                this.ignoreProcesses.Items.Add(p);
+            });
+            this.ignoreProcesses.EndUpdate();
+
             // 同時多重フック防止
             this.enabledSequential.Checked = Properties.Settings.Default.SequentialMode;
             this.sequentialInterval.Value = Properties.Settings.Default.SequentialInterval;
 
-            this.refreshControls(true);
+            this.refreshControls(true, true);
         }
 
         /// <summary>
         /// 内部状態に合わせてコントロール上の状態を更新します。
         /// </summary>
         /// <param name="includesHookItemInput">選択中のフック設定項目で編集欄を埋めるかどうか</param>
-        private void refreshControls(bool includesHookItemInput = false)
+        /// <param name="includesIgnoreProcessItemInput">選択中の無視プロセス設定項目で編集欄を埋めるかどうか</param>
+        private void refreshControls(bool includesHookItemInput = false, bool includesIgnoreProcessItemInput = false)
         {
             // フック設定
             if (this.selectedHookIndex == -1)
             {
-                this.addOrUpdateButton.Text = "追加(&A)";
+                this.hooksAddOrUpdateButton.Text = "追加(&A)";
             }
             else
             {
-                this.addOrUpdateButton.Text = "更新(&U)";
+                this.hooksAddOrUpdateButton.Text = "更新(&U)";
 
                 // 選択中の項目で編集欄を埋める
                 if (includesHookItemInput)
@@ -88,7 +105,24 @@ namespace App
                     this.processArgumentsText.Text = this.hooks.Items[this.selectedHookIndex].SubItems[2].Text;
                 }
             }
-            this.deleteButton.Enabled = this.selectedHookIndex != -1;
+            this.hooksDeleteButton.Enabled = this.selectedHookIndex != -1;
+
+            // 無視プロセス設定
+            if (this.selectedIgnoreProcessIndex == -1)
+            {
+                this.ignoreProcessesAddOrUpdateButton.Text = "追加(&A)";
+            }
+            else
+            {
+                this.ignoreProcessesAddOrUpdateButton.Text = "更新(&U)";
+
+                // 選択中の項目で編集欄を埋める
+                if (includesIgnoreProcessItemInput)
+                {
+                    this.ignoreProcessName.Text = this.ignoreProcesses.Items[this.selectedIgnoreProcessIndex].Text;
+                }
+            }
+            this.ignoreProcessesDeleteButton.Enabled = this.selectedIgnoreProcessIndex != -1;
 
             // 同時多重フック防止
             this.sequentialInterval.Enabled = this.enabledSequential.Checked;
@@ -104,7 +138,7 @@ namespace App
         {
             this.selectedHookIndex = (this.hooks.SelectedIndices.Count != 0) ? this.hooks.SelectedIndices[0] : -1;
 
-            this.refreshControls(true);
+            this.refreshControls(true, false);
         }
 
         /// <summary>
@@ -118,7 +152,7 @@ namespace App
                 this.selectedHookIndex = -1;
             }
 
-            this.refreshControls(true);
+            this.refreshControls(true, false);
         }
 
         /// <summary>
@@ -146,6 +180,51 @@ namespace App
                 item.SubItems[0].Text = Hook.ConvertHookTypeToName(this.hookType);
                 item.SubItems[1].Text = this.processFileNameText.Text;
                 item.SubItems[2].Text = this.processArgumentsText.Text;
+            }
+        }
+
+        /// <summary>
+        /// 無視プロセスが選択されたらその内容をコントロール上に反映します。
+        /// </summary>
+        private void ignoreProcessesSelectedIndexChanged(object sender, EventArgs e)
+        {
+            this.selectedIgnoreProcessIndex = (this.ignoreProcesses.SelectedIndices.Count != 0) ? this.ignoreProcesses.SelectedIndices[0] : -1;
+
+            this.refreshControls(false, true);
+        }
+
+        /// <summary>
+        /// 無視プロセスを削除します。
+        /// </summary>
+        private void ignoreProcessesDeleteButtonClicked(object sender, EventArgs e)
+        {
+            if (this.selectedIgnoreProcessIndex != -1)
+            {
+                this.ignoreProcesses.Items.RemoveAt(this.selectedIgnoreProcessIndex);
+                this.selectedIgnoreProcessIndex = -1;
+            }
+
+            this.refreshControls(false, true);
+        }
+
+        /// <summary>
+        /// 無視プロセスを追加または更新します。
+        /// </summary>
+        private void ignoreProcessesAddOrUpdateButtonClicked(object sender, EventArgs e)
+        {
+            if (this.selectedIgnoreProcessIndex == -1)
+            {
+                // 追加
+                var item = new ListViewItem(this.ignoreProcessName.Text);
+                this.ignoreProcesses.Items.Add(item);
+                this.ignoreProcesses.SelectedIndices.Clear();
+                this.ignoreProcesses.SelectedIndices.Add(this.ignoreProcesses.Items.Count - 1);
+            }
+            else
+            {
+                // 更新
+                var item = this.ignoreProcesses.Items[this.selectedIgnoreProcessIndex];
+                item.SubItems[0].Text = this.ignoreProcessName.Text;
             }
         }
 
@@ -193,6 +272,8 @@ namespace App
                 });
             }
             Properties.Settings.Default.Hooks = hooks;
+            Properties.Settings.Default.IgnoreProcesses = new StringCollection();
+            Properties.Settings.Default.IgnoreProcesses.AddRange(this.ignoreProcesses.Items.Cast<ListViewItem>().ToList().Select(item => item.Text).ToArray());
             Properties.Settings.Default.TargetAudioDeviceName = (string) this.targetAudioDevices.SelectedItem;
             Properties.Settings.Default.SequentialInterval = (int) this.sequentialInterval.Value;
             Properties.Settings.Default.SequentialMode = this.enabledSequential.Checked;
