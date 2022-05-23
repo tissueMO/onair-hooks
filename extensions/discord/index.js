@@ -11,7 +11,7 @@ client.on('ready', () => {
 });
 
 /**
- * マイクミュートの状態変更を検知してフック処理を行います。
+ * ミーティングデバイスの利用状態変更を検知してフック処理を行います。
  */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   const guildId = newState.guild.id;
@@ -21,7 +21,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   const state = getChangedState(oldState, newState);
 
   if (state) {
-    console.info(`[${guildName}]:[${username}] マイク ${state}`);
+    console.info(`[${guildName}]:[${username}] ミーティングデバイス ${state}`);
     const results = await Promise.allSettled(
       config.hooks
         .filter(h => h.guildId === guildId && h.userId === userId && h.state === state)
@@ -32,7 +32,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 });
 
 /**
- * マイクの使用状態が変更された場合に変更後の使用状態文字列を返します。
+ * ミーティングデバイスの利用状態が変更された場合に変更後の使用状態文字列を返します。
  * @param {VoiceState} oldState
  * @param {VoiceState} newState
  * @returns {'on' | 'off' | null}
@@ -40,28 +40,30 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 const getChangedState = (oldState, newState) => {
   const isEntry = oldState.channelId === null && newState.channelId !== null;
   const isExit = oldState.channelId !== null && newState.channelId === null;
+  const beforeUsedDevices = !oldState.selfMute || oldState.selfVideo;
+  const afterUsedDevices = !newState.selfMute || newState.selfVideo;
 
-  // ボイスチャンネルの入室 (ミュート状態)
-  if (isEntry && newState.selfMute) {
-    return null;
-  }
-  // ボイスチャンネルの入室 (非ミュート状態)
-  if (isEntry && !newState.selfMute) {
-    return 'on';
-  }
-
-  // ボイスチャンネルの退室 (ミュート状態)
-  if (isExit && newState.selfMute) {
-    return null;
-  }
-  // ボイスチャンネルの退室 (非ミュート状態)
-  if (isExit && !newState.selfMute) {
-    return 'off';
+  // ボイスチャンネルの入室
+  if (isEntry) {
+    if (afterUsedDevices) {
+      return 'on';
+    } else {
+      return null;
+    }
   }
 
-  // ミュート状態の変更
-  if (oldState.selfMute !== newState.selfMute) {
-    return newState.selfMute ? 'off' : 'on';
+  // ボイスチャンネルの退室
+  if (isExit) {
+    if (afterUsedDevices) {
+      return 'off';
+    } else {
+      return null;
+    }
+  }
+
+  // ミーティングデバイスの状態変更
+  if (beforeUsedDevices !== afterUsedDevices) {
+    return afterUsedDevices ? 'on' : 'off';
   }
 
   return null;
