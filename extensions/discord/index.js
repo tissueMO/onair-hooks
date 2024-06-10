@@ -1,13 +1,84 @@
-const { Client, Intents, VoiceState } = require('discord.js');
+const {
+  Client,
+  GatewayIntentBits,
+  VoiceState,
+  VoiceChannel,
+} = require('discord.js');
 const axios = require('axios').default;
-const client = new Client({ intents: Object.keys(Intents.FLAGS) });
+const client = new Client({ intents: [GatewayIntentBits.GuildVoiceStates] });
 const config = require('./config');
+
+/**
+ * @type VoiceChannel[]
+ */
+const shuffleChannels = [];
 
 /**
  * ログイン完了後に一度だけ実行されます。
  */
-client.on('ready', () => {
-  console.info(`Botは ${client.user.tag} でログインしています。`)
+client.once('ready', async () => {
+  const guildId = client.guilds.cache.firstKey();
+
+  console.info(`Botは ${client.user.tag}@${guildId} でログインしています。`);
+
+  // スラッシュコマンドを追加
+  const commands = config.commands.filter((c) => c.guildId === guildId);
+  await client.application.commands.set(commands, guildId);
+});
+
+/**
+ * スラッシュコマンドをハンドリングします。
+ */
+client.on('interactionCreate', async (interaction) => {
+  const guildName = interaction.guild.name;
+
+  if (interaction.isCommand()) {
+    switch (interaction.commandName) {
+      case 'shuffle':
+        console.info(`[${guildName}] コマンド: シャッフル`);
+
+        const members = shuffleChannels
+          .map(c => [...c.members.values()])
+          .flat()
+          .sort(() => Math.random() - 0.5);
+
+        const groups = chunkArray(members, Math.ceil(members.length / shuffleChannels.length));
+        groups.forEach((g, i) => console.log(`シャッフル結果(${i + 1}): ${g.map(m => m.user.username).join(', ')}`));
+
+        await Promise.allSettled(
+          groups
+            .map((g, i) => g.map(m => m.voice.setChannel(shuffleChannels[i])))
+            .flat()
+        );
+
+        interaction.reply('OK');
+        break;
+
+      case 'shuffle-list':
+        console.info(`[${guildName}] コマンド: シャッフル一覧`);
+        interaction.reply(`シャッフル対象のチャンネル: ${shuffleChannels.join(', ')}`);
+        break;
+
+      case 'shuffle-set':
+        console.info(`[${guildName}] コマンド: シャッフル設定`);
+
+        shuffleChannels.splice(0);
+
+        const channels = [
+          interaction.options.getChannel('channel1'),
+          interaction.options.getChannel('channel2'),
+          interaction.options.getChannel('channel3'),
+          interaction.options.getChannel('channel4'),
+          interaction.options.getChannel('channel5'),
+        ]
+        channels
+          .filter(c => c !== null)
+          .forEach(c => shuffleChannels.push(c));
+
+        interaction.reply('OK');
+        break;
+    }
+  }
 });
 
 /**
@@ -47,7 +118,7 @@ const getChangedState = (oldState, newState) => {
   if (isEntry) {
     if (afterUsedDevices) {
       return 'on';
-    } else {
+  } else {
       return null;
     }
   }
@@ -67,6 +138,22 @@ const getChangedState = (oldState, newState) => {
   }
 
   return null;
+};
+
+/**
+ * 配列を指定した要素数ごとに区切って分割します。
+ * @param {any[]} array
+ * @param {number} size
+ * @returns {any[]}
+ */
+const chunkArray = (array, size) => {
+  const result = [];
+
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
+  }
+
+  return result;
 };
 
 // プロセス終了時にログアウト
