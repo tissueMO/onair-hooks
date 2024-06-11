@@ -121,13 +121,14 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       .map(f => newState.guild.members.fetch(f.followerUserId))
   );
 
-  if (followers.length && newState.channel) {
+  if (followers.length && newState.channelId) {
     console.info(`[${guildName}]:[${username}] 追従イベント`);
 
+    const channel = await newState.guild.channels.fetch(newState.channelId);
     const results = await Promise.allSettled(
       followers
-        .filter(f => !!f.voice.channel)
-        .map(f => f.voice.setChannel(newState.channel))
+        .filter(f => !!f.voice.channelId && newState.channelId !== f.voice.channelId)
+        .map(f => f.voice.setChannel(channel))
     );
 
     console.info(`${results.length}件のフォロー処理が実行されました。(成功=${results.filter(r => r.status === 'fulfilled').length}, 失敗=${results.filter(r => r.status === 'rejected').length})`);
