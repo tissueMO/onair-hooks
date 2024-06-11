@@ -19,4 +19,11 @@ module.exports = {
       },
     },
   ],
+  follows: [
+    {
+      guildId: '111111111111111111',
+      followerUserId: '111111111111111111',
+      followeeUserId: '111111111111111111',
+    },
+  ],
 };
