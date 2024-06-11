@@ -82,23 +82,56 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 /**
- * ミーティングデバイスの利用状態変更を検知してフック処理を行います。
+ * ミーティングデバイスの利用状態変更を検知して任意のフック処理を行います。
  */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   const guildId = newState.guild.id;
   const guildName = newState.guild.name;
   const userId = newState.id;
-  const username = (await newState.guild.members.fetch(newState.id)).user.username;
+  const user = (await newState.guild.members.fetch(newState.id)).user;
+  const username = user.username;
   const state = getChangedState(oldState, newState);
 
   if (state) {
     console.info(`[${guildName}]:[${username}] ミーティングデバイス ${state}`);
+
     const results = await Promise.allSettled(
       config.hooks
         .filter(h => h.guildId === guildId && h.userId === userId && h.state === state)
         .map(({ hook: { url, method, headers, data } }) => axios.request({ url, method, headers, data }))
     );
+
     console.info(`${results.length}件のフック処理が実行されました。(成功=${results.filter(r => r.status === 'fulfilled').length}, 失敗=${results.filter(r => r.status === 'rejected').length})`);
+  }
+});
+
+/**
+ * ボイスチャンネルの移動に連動して任意のユーザーに追従するフック処理を行います。
+ */
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  const guildId = newState.guild.id;
+  const guildName = newState.guild.name;
+  const userId = newState.id;
+  const user = (await newState.guild.members.fetch(newState.id)).user;
+  const username = user.username;
+
+  const followers = await Promise.all(
+    config.follows
+      .filter(f => f.guildId === guildId && f.followeeUserId === userId)
+      .map(f => newState.guild.members.fetch(f.followerUserId))
+  );
+
+  if (followers.length && newState.channelId) {
+    console.info(`[${guildName}]:[${username}] 追従イベント`);
+
+    const channel = await newState.guild.channels.fetch(newState.channelId);
+    const results = await Promise.allSettled(
+      followers
+        .filter(f => !!f.voice.channelId && newState.channelId !== f.voice.channelId)
+        .map(f => f.voice.setChannel(channel))
+    );
+
+    console.info(`${results.length}件のフォロー処理が実行されました。(成功=${results.filter(r => r.status === 'fulfilled').length}, 失敗=${results.filter(r => r.status === 'rejected').length})`);
   }
 });
 

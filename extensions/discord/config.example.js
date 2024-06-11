@@ -1,4 +1,11 @@
 module.exports = {
+  commands: [
+    {
+      guildId: '111111111111111111',
+      name: 'example',
+      description: 'Sample Command',
+    },
+  ],
   hooks: [
     {
       guildId: '111111111111111111',
@@ -17,6 +24,13 @@ module.exports = {
         url: 'https://example.com/',
         method: 'get',
       },
+    },
+  ],
+  follows: [
+    {
+      guildId: '111111111111111111',
+      followerUserId: '111111111111111111',
+      followeeUserId: '111111111111111111',
     },
   ],
 };
