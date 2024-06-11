@@ -1,4 +1,11 @@
 module.exports = {
+  commands: [
+    {
+      guildId: '111111111111111111',
+      name: 'example',
+      description: 'Sample Command',
+    },
+  ],
   hooks: [
     {
       guildId: '111111111111111111',
