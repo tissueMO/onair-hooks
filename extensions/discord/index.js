@@ -31,9 +31,10 @@ client.once('ready', async () => {
 
   // 永続化した設定をロード
   try {
-    shuffleChannels = Array.from(JSON.parse(await fs.readFile(SHUFFLE_FILE)))
-      .map(id => client.channels.cache.get(id))
-      .filter(c => !!c);
+    shuffleChannels = await Promise.all(
+      Array.from(JSON.parse(await fs.readFile(SHUFFLE_FILE)))
+        .map(id => client.channels.cache.fetch(id))
+    );
   } catch {
     shuffleChannels = [];
   }
