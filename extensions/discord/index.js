@@ -65,9 +65,7 @@ client.on('interactionCreate', async (interaction) => {
         interaction.options.getChannel('channel4'),
         interaction.options.getChannel('channel5'),
       ]
-      shuffleChannels = channels
-        .filter(c => c !== null)
-        .map(c => shuffleChannels);
+      shuffleChannels = channels.filter(c => c !== null);
 
       // 設定を永続化
       await fs.writeFile(SHUFFLE_FILE, JSON.stringify(shuffleChannels.map(c => c.id)));
