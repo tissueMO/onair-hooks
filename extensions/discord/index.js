@@ -4,14 +4,18 @@ const {
   VoiceState,
   VoiceChannel,
 } = require('discord.js');
+const fs = require('fs').promises;
+const path = require('path');
 const axios = require('axios').default;
 const client = new Client({ intents: [GatewayIntentBits.GuildVoiceStates] });
 const config = require('./config');
 
+const SHUFFLE_FILE = path.join(process.env.STORE_PATH, 'shuffle.json');
+
 /**
  * @type VoiceChannel[]
  */
-const shuffleChannels = [];
+let shuffleChannels = [];
 
 /**
  * ログイン完了後に一度だけ実行されます。
@@ -22,8 +26,17 @@ client.once('ready', async () => {
   console.info(`Botは ${client.user.tag}@${guildId} でログインしています。`);
 
   // スラッシュコマンドを追加
-  const commands = config.commands.filter((c) => c.guildId === guildId);
+  const commands = config.commands.filter(c => c.guildId === guildId);
   await client.application.commands.set(commands, guildId);
+
+  // 永続化した設定をロード
+  try {
+    shuffleChannels = Array.from(JSON.parse(await fs.readFile(SHUFFLE_FILE)))
+      .map(id => client.channels.cache.get(id))
+      .filter(c => !!c);
+  } catch {
+    shuffleChannels = [];
+  }
 });
 
 /**
@@ -32,52 +45,55 @@ client.once('ready', async () => {
 client.on('interactionCreate', async (interaction) => {
   const guildName = interaction.guild.name;
 
-  if (interaction.isCommand()) {
-    switch (interaction.commandName) {
-      case 'shuffle':
-        console.info(`[${guildName}] コマンド: シャッフル`);
+  if (!interaction.isCommand()) {
+    return;
+  }
 
-        const members = shuffleChannels
-          .map(c => [...c.members.values()])
+  switch (interaction.commandName) {
+    case 'shuffle-list':
+      console.info(`[${guildName}] コマンド: シャッフル一覧`);
+      await interaction.reply(`シャッフル対象のチャンネル: ${shuffleChannels.join(', ')}`);
+      break;
+
+    case 'shuffle-set':
+      console.info(`[${guildName}] コマンド: シャッフル設定`);
+
+      const channels = [
+        interaction.options.getChannel('channel1'),
+        interaction.options.getChannel('channel2'),
+        interaction.options.getChannel('channel3'),
+        interaction.options.getChannel('channel4'),
+        interaction.options.getChannel('channel5'),
+      ]
+      shuffleChannels = channels
+        .filter(c => c !== null)
+        .map(c => shuffleChannels);
+
+      // 設定を永続化
+      await fs.writeFile(SHUFFLE_FILE, JSON.stringify(shuffleChannels.map(c => c.id)));
+
+      await interaction.reply("OK");
+      break;
+
+    case 'shuffle':
+      console.info(`[${guildName}] コマンド: シャッフル`);
+      await interaction.reply("OK");
+
+      // 遅延的にシャッフルを実行
+      const members = shuffleChannels
+        .map(c => [...c.members.values()])
+        .flat()
+        .sort(() => Math.random() - 0.5);
+
+      const groups = chunkArray(members, Math.ceil(members.length / shuffleChannels.length));
+      groups.forEach((g, i) => console.log(`シャッフル結果(${i + 1}): ${g.map(m => m.user.username).join(', ')}`));
+
+      await Promise.allSettled(
+        groups
+          .map((g, i) => g.map((m) => m.voice.setChannel(shuffleChannels[i])))
           .flat()
-          .sort(() => Math.random() - 0.5);
-
-        const groups = chunkArray(members, Math.ceil(members.length / shuffleChannels.length));
-        groups.forEach((g, i) => console.log(`シャッフル結果(${i + 1}): ${g.map(m => m.user.username).join(', ')}`));
-
-        await Promise.allSettled(
-          groups
-            .map((g, i) => g.map(m => m.voice.setChannel(shuffleChannels[i])))
-            .flat()
-        );
-
-        interaction.reply('OK');
-        break;
-
-      case 'shuffle-list':
-        console.info(`[${guildName}] コマンド: シャッフル一覧`);
-        interaction.reply(`シャッフル対象のチャンネル: ${shuffleChannels.join(', ')}`);
-        break;
-
-      case 'shuffle-set':
-        console.info(`[${guildName}] コマンド: シャッフル設定`);
-
-        shuffleChannels.splice(0);
-
-        const channels = [
-          interaction.options.getChannel('channel1'),
-          interaction.options.getChannel('channel2'),
-          interaction.options.getChannel('channel3'),
-          interaction.options.getChannel('channel4'),
-          interaction.options.getChannel('channel5'),
-        ]
-        channels
-          .filter(c => c !== null)
-          .forEach(c => shuffleChannels.push(c));
-
-        interaction.reply('OK');
-        break;
-    }
+      );
+      break;
   }
 });
 
