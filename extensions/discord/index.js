@@ -33,7 +33,7 @@ client.once('ready', async () => {
   try {
     shuffleChannels = await Promise.all(
       Array.from(JSON.parse(await fs.readFile(SHUFFLE_FILE)))
-        .map(id => client.channels.cache.fetch(id))
+        .map(id => client.channels.fetch(id))
     );
   } catch {
     shuffleChannels = [];
