@@ -1,3 +1,4 @@
+const { Client, Guild } = require('discord.js');
 const Addon = require('./Addon');
 
 /**
@@ -5,14 +6,16 @@ const Addon = require('./Addon');
  */
 class FollowAddon extends Addon {
   /**
-   * @inheritdoc
+   * @override
    */
   get configKey() {
     return 'follows';
   }
 
   /**
-   * @inheritdoc
+   * @override
+   * @param {Client} client
+   * @param {Guild} guild
    */
   async initialize(client, guild) {
     super.initialize(client, guild);

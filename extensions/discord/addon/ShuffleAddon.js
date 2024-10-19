@@ -2,7 +2,7 @@ const Addon = require('./Addon');
 const fs = require('fs').promises;
 const path = require('path');
 const { chunkArray } = require('../common');
-const { Guild, CommandInteraction } = require('discord.js');
+const { Guild, CommandInteraction, Client } = require('discord.js');
 
 const SHUFFLE_FILE = path.join(process.env.STORE_PATH, 'shuffle.json');
 
@@ -69,14 +69,16 @@ class ShuffleAddon extends Addon {
   }
 
   /**
-   * @inheritdoc
+   * @override
    */
   get configKey() {
     return 'shuffles';
   }
 
   /**
-   * @inheritdoc
+   * @override
+   * @param {Client} client
+   * @param {Guild} guild
    */
   async initialize(client, guild) {
     super.initialize(client, guild);

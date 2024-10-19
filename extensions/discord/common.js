@@ -1,3 +1,5 @@
+const ffmpeg = require('fluent-ffmpeg');
+
 /**
  * 配列を指定した要素数ごとに区切って分割します。
  * @param {any[]} array
@@ -12,4 +14,26 @@ exports.chunkArray = (array, size) => {
   }
 
   return result;
+};
+
+/**
+ * PCM形式の音声データをWave形式に変換します。
+ * @param {string|ReadableStream} inputStream
+ * @param {string|WritableStream} outputStream
+ * @returns {Promise}
+ */
+exports.pcmToWav = async (source, destination) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(source)
+      .inputOptions([
+        '-f s16le',
+        '-ar 48k',
+        '-ac 2',
+      ])
+      .on('end', () => resolve())
+      .on('error', (err) => reject(err))
+      .output(destination)
+      .run();
+  });
 };

@@ -1,3 +1,4 @@
+const { Client, Guild } = require('discord.js');
 const Addon = require('./Addon');
 const axios = require('axios').default;
 
@@ -6,14 +7,16 @@ const axios = require('axios').default;
  */
 class HookAddon extends Addon {
   /**
-   * @inheritdoc
+   * @override
    */
   get configKey() {
     return 'hooks';
   }
 
   /**
-   * @inheritdoc
+   * @override
+   * @param {Client} client
+   * @param {Guild} guild
    */
   async initialize(client, guild) {
     super.initialize(client, guild);

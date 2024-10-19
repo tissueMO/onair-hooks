@@ -4,9 +4,14 @@
   "author": "tissueMO",
   "private": true,
   "dependencies": {
+    "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.17.0",
     "axios": "^0.27.2",
-    "discord.js": "^14"
+    "discord.js": "^14",
+    "fluent-ffmpeg": "^2.1.3",
+    "libsodium-wrappers": "^0.7.15",
+    "prism-media": "^1.3.5",
+    "uuid": "^10.0.0"
   },
   "scripts": {
     "dev": "yarn && node index.js",
