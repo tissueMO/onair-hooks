@@ -1,9 +1,12 @@
 module.exports = {
-  commands: [
+  shuffles: [
     {
       guildId: '111111111111111111',
-      name: 'example',
-      description: 'Sample Command',
+    },
+  ],
+  records: [
+    {
+      guildId: '111111111111111111',
     },
   ],
   hooks: [

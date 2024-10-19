@@ -4,6 +4,7 @@
   "author": "tissueMO",
   "private": true,
   "dependencies": {
+    "@discordjs/voice": "^0.17.0",
     "axios": "^0.27.2",
     "discord.js": "^14"
   },
