@@ -1,29 +1,29 @@
-const util = require('util')
-const parsed = util.parseArgs({
+const { parseArgs } = require('util');
+const WorkerManager = require('./worker/WorkerManager');
+const PcmToWavWorker = require('./worker/PcmToWavWorker');
+const TranscribeWorker = require('./worker/TranscribeWorker');
+
+// コマンドライン引数
+const parsedArgs = parseArgs({
 	options: {
-		aaa: {
+		worker: {
 			type: 'string',
+			multiple: false,
 		},
-		bbb: {
-			type: 'string',
-			multiple: true,
-		},
-		ccc: {
-			type: 'string',
-			short: 'c',
-		},
-		ddd: {
-			type: 'boolean',
-			multiple: true,
-		},
-		eee: {
-			type: 'boolean',
-			short: 'e',
-		},
-		fff: {
-			type: 'boolean',
-			short: 'f',
-		}
 	}
 })
-console.log(parsed)
+
+// ワーカー登録
+const manager = new WorkerManager();
+
+if (parsedArgs.values.worker === 'pcm') {
+	console.info('音声変換ワーカーを実行します...');
+	manager.register(new PcmToWavWorker());
+}
+if (parsedArgs.values.worker === 'transcribe') {
+	console.info('文字起こしワーカーを実行します...');
+	manager.register(new TranscribeWorker());
+}
+
+// ワーカー開始
+manager.start();

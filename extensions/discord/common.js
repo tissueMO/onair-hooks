@@ -1,5 +1,6 @@
 const ffmpeg = require('fluent-ffmpeg');
 const { createClient } = require('redis');
+const { RedisClientType } = require('@redis/client');
 
 /**
  * 配列を指定した要素数ごとに区切って分割します。
@@ -40,16 +41,9 @@ exports.pcmToWav = async (source, destination) => {
 };
 
 /**
- * Redisに接続し、任意の処理を行います。
- * @param {Function} callback
- * @returns {Promise<*>} コールバック関数が返した値で解決されます。
+ * 接続済みのRedisクライアントを返します。
+ * @returns {Promise<RedisClientType>}
  */
-exports.useRedis = async (callback) => {
-  const client = await createClient({ url: process.env.REDIS_HOST }).connect();
-
-  try {
-    return await callback?.(client);
-  } finally {
-    await client.disconnect();
-  }
+exports.createRedisClient = async () => {
+  return await createClient({ url: process.env.REDIS_HOST }).connect();
 };

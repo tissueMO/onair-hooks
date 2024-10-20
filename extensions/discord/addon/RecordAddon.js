@@ -1,21 +1,26 @@
 const { Client, Guild, CommandInteraction } = require('discord.js');
 const { joinVoiceChannel, EndBehaviorType } = require('@discordjs/voice');
 const Addon = require('./Addon');
-const fs = require('fs');
+const fs = require('fs').promises;
+const { createWriteStream } = require('fs');
 const { pipeline } = require('stream/promises');
 const { v4: uuid } = require('uuid');
 const path = require('path');
 const prism = require('prism-media');
-const { pcmToWav, useRedis } = require('../common');
-const FormData = require('form-data');
-const { Agent } = require('http');
-const axios = require('axios').default;
+const { createRedisClient } = require('../common');
+const PcmToWavWorker = require('../worker/PcmToWavWorker');
+const { RedisClientType } = require('@redis/client');
 
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
  */
 class RecordAddon extends Addon {
   #connection;
+
+  /**
+   * @type {RedisClientType}
+   */
+  #redisClient;
 
   /**
    * 登録するコマンド一覧
@@ -62,7 +67,13 @@ class RecordAddon extends Addon {
       console.info(`[RecordAddon] <${guild.name}> コマンドを登録しました。`);
     } else {
       console.info(`[RecordAddon] <${guild.name}> このサーバーでは無効です。`);
+      return;
     }
+
+    // Redis 接続
+    this.#redisClient = await createRedisClient();
+
+    // TODO: Botが参加しているボイスチャンネルを監視して、全員いなくなったら自動で退出する
 
     // コマンドハンドリング
     client.on('interactionCreate', async (/** @type {CommandInteraction} */ interaction) => {
@@ -104,21 +115,20 @@ class RecordAddon extends Addon {
               }
 
               // 記録データ作成
-              context[userId] = {
-                sessionId: uuid(),
+              const sessionId = uuid();
+              const userContext = {
+                sessionId,
                 channel: channel.id,
                 userId,
                 userName: guild.members.cache.get(userId).displayName,
                 start: new Date(),
               };
+              context[userId] = userContext;
 
-              // 生成ファイル定義
-              const baseFile = path.join('/tmp', `${uuid()}`);
-              const pcmFile = `${baseFile}.pcm`;
-              const wavFile = `${baseFile}.wav`;
+              const pcmFile = path.join('/tmp', `${uuid()}.pcm`);
 
               // キャプチャー開始
-              console.info(`キャプチャー開始: ${userId}`);
+              console.info(`キャプチャー開始: User<${userId}> Session<${sessionId}>`);
               try {
                 await pipeline(
                   connection.receiver.subscribe(userId, {
@@ -128,40 +138,36 @@ class RecordAddon extends Addon {
                     },
                   }),
                   new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }),
-                  fs.createWriteStream(pcmFile)
+                  createWriteStream(pcmFile)
                 );
-
-                // PCMからWave形式に変換
-                await pcmToWav(pcmFile, wavFile);
+                console.info(`キャプチャー終了: User<${userId}> Session<${sessionId}> --> ${pcmFile}`);
 
               } catch (err) {
-                console.error(`キャプチャー失敗: ${baseFile}`, context[userId], err);
-                delete context[userId];
+                console.error(`キャプチャー失敗: User<${userId}> Session<${sessionId}>`, err);
                 return;
+
+              } finally {
+                delete context[userId];
               }
 
-              console.info(`キャプチャー終了: ${wavFile}`);
+              // コンテキストを保存して音声変換ワーカーにキューイング
+              userContext['end'] = new Date();
+              userContext['transcription'] = null;
 
-              // キャプチャー完了
-              context[userId]['end'] = new Date();
+              const pcmData = await fs.readFile(pcmFile);
+              const firstWorkerPrefix = new PcmToWavWorker().prefix;
 
-              // 文字起こし実行
-              const whisperClient = axios.create({
-                timeout: 300000,
-                httpAgent: new Agent({ keepAlive: true }),
-              });
-              const requestData = new FormData();
-              requestData.append('file', fs.createReadStream(wavFile));
-              const { data } = await whisperClient.post(`${process.env.WHISPER_HOST}/transcribe`, requestData, { headers: requestData.getHeaders() });
-              context[userId]['transcription'] = data['transcription'] ?? '(文字起こし失敗)';
+              await this.#redisClient.multi()
+                .setEx(`context:${sessionId}`, 43200, JSON.stringify(userContext))
+                .zAdd(`sessions`, { score: userContext.start.getTime(), value: sessionId })
+                .lPush(`${firstWorkerPrefix}:queue`, sessionId)
+                .setEx(`${firstWorkerPrefix}:data:input:${sessionId}`, 3600, pcmData)
+                .exec();
 
-              // TODO: 結果とコンテキストを合わせてRedisへ格納
-              await useRedis(client => {
-                client.setex(`context:${context[userId]['sessionId']}`, 43200, data);
-              });
+              // 後片付け
+              await fs.unlink(pcmFile);
 
-              console.info('キャプチャー完了:', context[userId]);
-              delete context[userId];
+              console.info('キャプチャー完了:', userContext);
             });
 
             this.#connection = connection;

@@ -1,13 +1,19 @@
+import os
 from flask import Flask, request, jsonify
 from faster_whisper import WhisperModel
 
-model = WhisperModel("medium")
+# モデル選択
+model = WhisperModel(os.environ["WHISPER_MODEL"])
 
+# Webサーバー
 app = Flask(__name__)
 app.json.ensure_ascii = False
 
+
 @app.route("/transcribe", methods=["POST"])
 def transcribe():
+    """音声データを文字起こしします。
+    """
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 

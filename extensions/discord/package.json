@@ -17,6 +17,8 @@
   },
   "scripts": {
     "dev": "yarn && node index.js",
-    "build": " tar --exclude 'node_modules' --exclude '.env*' --exclude 'config.example.js' --exclude '.gitignore' --exclude 'docker-compose.yml' -cvf ../onair-hooks-discord-extension.tar ."
+    "build": " tar --exclude 'node_modules' --exclude '.env*' --exclude 'config.example.js' --exclude '.gitignore' --exclude 'docker-compose.yml' -cvf ../onair-hooks-discord-extension.tar .",
+    "worker:pcm": "node worker.js --worker pcm",
+    "worker:transcribe": "node worker.js --worker transcribe"
   }
 }
