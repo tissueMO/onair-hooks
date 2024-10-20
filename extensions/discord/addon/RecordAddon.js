@@ -12,7 +12,7 @@ const { Agent } = require('http');
 const axios = require('axios').default;
 
 /**
- *
+ * 任意のボイスチャンネルの文字起こしと要約を行います。
  */
 class RecordAddon extends Addon {
   #connection;
@@ -23,12 +23,20 @@ class RecordAddon extends Addon {
   static get COMMANDS() {
     return [
       {
-        name: "record-start",
-        description: "ボイスチャンネルに議事録要約Botを参加させます。",
+        name: 'record-start',
+        description: 'ボイスチャンネルに議事録要約Botを参加させます。',
       },
       {
-        name: "record-end",
-        description: "ボイスチャンネルから議事録要約Botを退出させます。",
+        name: 'record-end',
+        description: 'ボイスチャンネルから議事録要約Botを退出させます。',
+      },
+      {
+        name: 'record-view',
+        description: '指定したチャンネルの時間範囲における文字起こしを取得します。',
+      },
+      {
+        name: 'record-summary',
+        description: '指定したチャンネルの時間範囲における要約を取得します。',
       },
     ];
   }
@@ -37,7 +45,7 @@ class RecordAddon extends Addon {
    * @override
    */
   get configKey() {
-    return "records";
+    return 'records';
   }
 
   /**
@@ -50,20 +58,14 @@ class RecordAddon extends Addon {
 
     // スラッシュコマンドを追加
     if (this.settings[guild.id].length > 0) {
-      await Promise.all(
-        RecordAddon.COMMANDS.map((command) =>
-          client.application.commands.create(command, guild.id),
-        ),
-      );
+      await Promise.all(RecordAddon.COMMANDS.map((command) => client.application.commands.create(command, guild.id)));
       console.info(`[RecordAddon] <${guild.name}> コマンドを登録しました。`);
     } else {
       console.info(`[RecordAddon] <${guild.name}> このサーバーでは無効です。`);
     }
 
     // コマンドハンドリング
-    client.on(
-      "interactionCreate",
-      async (/** @type {CommandInteraction} */ interaction) => {
+    client.on('interactionCreate', async (/** @type {CommandInteraction} */ interaction) => {
         if (interaction.guildId !== guild.id || !interaction.isCommand()) {
           return;
         }
@@ -73,12 +75,12 @@ class RecordAddon extends Addon {
 
         // コマンド別
         switch (interaction.commandName) {
-          case "record-start":
+          case 'record-start':
             console.info(`[RecordAddon] <${guild.name}> コマンド: 記録開始`);
 
             if (!channel) {
               await interaction.reply({
-                content: "ボイスチャンネルに参加してから呼び出してください。",
+                content: 'ボイスチャンネルに参加してから呼び出してください。',
                 ephemeral: true,
               });
               return;
@@ -96,20 +98,21 @@ class RecordAddon extends Addon {
 
             const context = {};
 
-            connection.receiver.speaking.on("start", async (userId) => {
+            connection.receiver.speaking.on('start', async (userId) => {
               if (context[userId]) {
                 return;
               }
 
+              // 記録データ作成
               context[userId] = {
-                start: new Date(),
                 channel: channel.id,
                 userId,
                 userName: guild.members.cache.get(userId).displayName,
+                start: new Date(),
               };
 
               // 生成ファイル定義
-              const baseFile = path.join("/tmp", `${uuid()}`);
+              const baseFile = path.join('/tmp', `${uuid()}`);
               const pcmFile = `${baseFile}.pcm`;
               const wavFile = `${baseFile}.wav`;
 
@@ -149,7 +152,6 @@ class RecordAddon extends Addon {
               const requestData = new FormData();
               requestData.append('file', fs.createReadStream(wavFile));
               const { data } = await whisperClient.post('http://whisper:5000/transcribe', requestData, { headers: requestData.getHeaders() });
-              console.log(data);
               context[userId]['transcription'] = data['transcription'] ?? '(文字起こし失敗)';
 
               // TODO: 結果とコンテキストを合わせてRedisへ格納
@@ -166,15 +168,25 @@ class RecordAddon extends Addon {
             });
             break;
 
-          case "record-end":
+          case 'record-end':
             console.info(`[RecordAddon] <${guild.name}> コマンド: 記録終了`);
 
             this.#connection?.disconnect();
 
             await interaction.reply({
-              content: "OK",
+              content: 'OK',
               ephemeral: true,
             });
+            break;
+
+          case 'record-view':
+            // TODO: Redisから指定範囲の文字起こしを取得
+            // await interaction.deferReply({ ephemeral: true });
+            break;
+
+          case 'record-summary':
+            // TODO: Redisから指定範囲の文字起こしを取得 > Open WebUI API 経由で要約
+            // await interaction.deferReply({ ephemeral: true });
             break;
         }
       },
