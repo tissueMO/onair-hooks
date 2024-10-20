@@ -7,6 +7,9 @@ const { v4: uuid } = require('uuid');
 const path = require('path');
 const prism = require('prism-media');
 const { pcmToWav } = require('../common');
+const FormData = require('form-data');
+const { Agent } = require('http');
+const axios = require('axios').default;
 
 /**
  *
@@ -133,13 +136,25 @@ class RecordAddon extends Addon {
                 return;
               }
 
+              console.info(`キャプチャー終了: ${wavFile}`);
+
               // キャプチャー完了
               context[userId]['end'] = new Date();
 
-              // TODO: 文字起こし実行 > 結果とコンテキストを合わせてRedisへ格納
-              context[userId]['transcribe'] = '(未実装)';
+              // 文字起こし実行
+              const whisperClient = axios.create({
+                timeout: 300000,
+                httpAgent: new Agent({ keepAlive: true }),
+              });
+              const requestData = new FormData();
+              requestData.append('file', fs.createReadStream(wavFile));
+              const { data } = await whisperClient.post('http://whisper:5000/transcribe', requestData, { headers: requestData.getHeaders() });
+              console.log(data);
+              context[userId]['transcription'] = data['transcription'] ?? '(文字起こし失敗)';
 
-              console.info(`キャプチャー完了: ${wavFile}`, context[userId]);
+              // TODO: 結果とコンテキストを合わせてRedisへ格納
+
+              console.info('キャプチャー完了:', context[userId]);
               delete context[userId];
             });
 

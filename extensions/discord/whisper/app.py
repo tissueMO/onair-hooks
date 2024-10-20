@@ -12,13 +12,12 @@ def transcribe():
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["file"]
-
     file_path = f"/tmp/{file.filename}"
     file.save(file_path)
 
     segments, _ = model.transcribe(file_path)
 
-    result = {"transcription": " ".join([segment.text for segment in segments])}
+    result = {"transcription": "\n".join([segment.text for segment in segments])}
     return jsonify(result)
 
 
