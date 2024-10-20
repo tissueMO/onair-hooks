@@ -1,4 +1,7 @@
 version: '3'
+volumes:
+  redis-data:
+  redis-insight-data:
 services:
   app:
     build: .
@@ -10,6 +13,9 @@ services:
       - /tmp
     env_file:
       - .env
+    environment:
+      WHISPER_HOST: http://whisper:5000
+      REDIS_HOST: redis://redis:6379
   whisper:
     build: whisper
     ports:
@@ -20,3 +26,17 @@ services:
       - ./whisper:/app
     tmpfs:
       - /tmp
+  redis:
+    image: redis:7.4
+    ports:
+      - 6379:6379
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - redis-data:/data
+  redis-ui:
+    image: redis/redisinsight:latest
+    ports:
+      - 5540:5540
+    volumes:
+      - redis-insight-data:/data

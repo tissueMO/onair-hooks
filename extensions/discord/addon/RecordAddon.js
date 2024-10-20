@@ -6,7 +6,7 @@ const { pipeline } = require('stream/promises');
 const { v4: uuid } = require('uuid');
 const path = require('path');
 const prism = require('prism-media');
-const { pcmToWav } = require('../common');
+const { pcmToWav, useRedis } = require('../common');
 const FormData = require('form-data');
 const { Agent } = require('http');
 const axios = require('axios').default;
@@ -105,6 +105,7 @@ class RecordAddon extends Addon {
 
               // 記録データ作成
               context[userId] = {
+                sessionId: uuid(),
                 channel: channel.id,
                 userId,
                 userName: guild.members.cache.get(userId).displayName,
@@ -151,10 +152,13 @@ class RecordAddon extends Addon {
               });
               const requestData = new FormData();
               requestData.append('file', fs.createReadStream(wavFile));
-              const { data } = await whisperClient.post('http://whisper:5000/transcribe', requestData, { headers: requestData.getHeaders() });
+              const { data } = await whisperClient.post(`${process.env.WHISPER_HOST}/transcribe`, requestData, { headers: requestData.getHeaders() });
               context[userId]['transcription'] = data['transcription'] ?? '(文字起こし失敗)';
 
               // TODO: 結果とコンテキストを合わせてRedisへ格納
+              await useRedis(client => {
+                client.setex(`context:${context[userId]['sessionId']}`, 43200, data);
+              });
 
               console.info('キャプチャー完了:', context[userId]);
               delete context[userId];
