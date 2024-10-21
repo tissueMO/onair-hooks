@@ -2,7 +2,7 @@ const Addon = require('./Addon');
 const fs = require('fs').promises;
 const path = require('path');
 const { chunkArray } = require('../common');
-const { Guild, CommandInteraction, Client } = require('discord.js');
+const { Guild, CommandInteraction, Client, ChannelType, ApplicationCommandOptionType } = require('discord.js');
 
 const SHUFFLE_FILE = path.join(process.env.STORE_PATH, 'shuffle.json');
 
@@ -36,32 +36,32 @@ class ShuffleAddon extends Addon {
           {
             name: 'channel1',
             description: 'ボイスチャンネル1',
-            type: 7,
-            channelTypes: [2],
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildVoice],
           },
           {
             name: 'channel2',
             description: 'ボイスチャンネル2',
-            type: 7,
-            channelTypes: [2],
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildVoice],
           },
           {
             name: 'channel3',
             description: 'ボイスチャンネル3',
-            type: 7,
-            channelTypes: [2],
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildVoice],
           },
           {
             name: 'channel4',
             description: 'ボイスチャンネル4',
-            type: 7,
-            channelTypes: [2],
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildVoice],
           },
           {
             name: 'channel5',
             description: 'ボイスチャンネル5',
-            type: 7,
-            channelTypes: [2],
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildVoice],
           },
         ],
       },
