@@ -8,6 +8,7 @@ model = WhisperModel(os.environ["WHISPER_MODEL"])
 # Webサーバー
 app = Flask(__name__)
 app.json.ensure_ascii = False
+app.config["MAX_CONTENT_LENGTH"] = 30 * 1000 * 1000
 
 
 @app.route("/transcribe", methods=["POST"])

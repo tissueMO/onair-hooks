@@ -1,8 +1,6 @@
-const { commandOptions } = require('redis');
 const { default: axios } = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
-const { v4: uuid } = require('uuid');
 const FormData = require('form-data');
 const { Agent } = require('http');
 const Worker = require('./Worker');
@@ -35,25 +33,15 @@ class TranscribeWorker extends Worker {
     for (const id of ids) {
       console.info(`<${this.prefix}> ID: ${id} の変換開始...`);
 
-      // 実データ取得
-      const dataKey = `${this.prefix}:data:input:${id}`;
-      const wavData = await this.redisClient.get(commandOptions({ returnBuffers: true }), dataKey);
-      this.redisClient.del(dataKey);
-
-      if (!wavData) {
-        console.error(`<${this.prefix}> ID: ${id} の変換失敗: 実体ファイルがありません。`);
-        continue;
-      }
-
-      // 一時ファイルに書き出し
-      const wavFile = path.join('/tmp', `${uuid()}.wav`);
-      await fs.writeFile(wavFile, wavData);
-
       // 文字起こし実行
+      const file = path.join(process.env.WORKER_PATH, `${id}.mp3`);
       const requestData = new FormData();
-      requestData.append('file', createReadStream(wavFile));
+      requestData.append('file', createReadStream(file));
+
       const { data: responseData } = await whisperClient.post('/transcribe', requestData, { headers: requestData.getHeaders() });
-      const transcription = responseData['transcription'] ?? '(文字起こし失敗)';
+
+      // 後片付け
+      await fs.unlink(file);
 
       // コンテキストに文字起こし結果を反映
       const context = await this.redisClient.get(`context:${id}`)
@@ -64,12 +52,9 @@ class TranscribeWorker extends Worker {
         continue;
       }
 
-      context['transcription'] = transcription;
+      context['transcription'] = responseData['transcription'] ?? '(文字起こし失敗)';
 
       await this.redisClient.setEx(`context:${id}`, 43200, JSON.stringify(context));
-
-      // 後片付け
-      await fs.unlink(wavFile);
 
       console.info(`<${this.prefix}> ID: ${id} の文字起こし完了`);
     }
