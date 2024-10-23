@@ -175,7 +175,7 @@ class RecordAddon extends Addon {
         connection.receiver.speaking.on('start', async (userId) => {
           if (!this.#contexts[userId]) {
             await Promise.resolve()
-              .then(() => this.#capture({
+              .then(() => this.#capture(connection, {
                 sessionId: uuid(),
                 channelId: channel.id,
                 userId,
@@ -348,8 +348,11 @@ class RecordAddon extends Addon {
       return null;
     }
 
+    const now = dayjs().tz().format('YYYY-MM-DD');
     const header = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} ${channel} にて:`;
-    const lines = contexts.map(context => `[${dayjs.tz(context.start).format('HH:mm')}] ${context.userName}「${context.transcription}」`);
+    const lines = contexts
+      .map(context => ({ ...context, transcription: context.transcription.replace(/\n/g, '。') }))
+      .map(context => `[${dayjs(context.start).tz().format('HH:mm')}] ${context.userName}「${context.transcription}」`);
 
     return header + '\n\n' + lines.join('\n');
   }
@@ -362,7 +365,7 @@ class RecordAddon extends Addon {
    * @returns {string|null}
    */
   async #summarize(channel, start, end) {
-    const transcription = this.#fetchTranscription(channel, start, end);
+    const transcription = await this.#fetchTranscription(channel, start, end);
     if (!transcription) {
       return null;
     }

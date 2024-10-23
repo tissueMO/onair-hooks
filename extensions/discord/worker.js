@@ -17,11 +17,11 @@ const parsedArgs = parseArgs({
 const manager = new WorkerManager();
 
 if (parsedArgs.values.worker === 'convert') {
-	console.info('音声変換ワーカーを実行します...');
+	console.info('音声変換ワーカーを開始します...');
 	manager.register(new ConvertWorker());
 }
 if (parsedArgs.values.worker === 'transcribe') {
-	console.info('文字起こしワーカーを実行します...');
+	console.info('文字起こしワーカーを開始します...');
 	manager.register(new TranscribeWorker());
 }
 
