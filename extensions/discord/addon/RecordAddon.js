@@ -7,11 +7,12 @@ const { v4: uuid } = require('uuid');
 const path = require('path');
 const prism = require('prism-media');
 const { createRedisClient } = require('../common');
-const PcmToWavWorker = require('../worker/ConvertWorker');
+const ConvertWorker = require('../worker/ConvertWorker');
 const { RedisClientType } = require('@redis/client');
 const dayjs = require('dayjs');
 const timezone = require('dayjs/plugin/timezone');
 const utc = require('dayjs/plugin/utc');
+const { default: axios } = require('axios');
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -30,6 +31,11 @@ class RecordAddon extends Addon {
    * @type {RedisClientType}
    */
   #redisClient;
+
+  /**
+   * @type {Object}
+   */
+  #contexts;
 
   /**
    * 登録するコマンド一覧
@@ -141,159 +147,106 @@ class RecordAddon extends Addon {
       /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
       const channel = interaction.member.voice?.channel;
 
-      // コマンド別
-      switch (interaction.commandName) {
-        case 'record-start':
-          console.info(`[RecordAddon] <${guild.name}> コマンド: 記録開始`);
+      // 文字起こし開始コマンド
+      if (interaction.commandName === 'record-start') {
+        console.info(`[RecordAddon] <${guild.name}> コマンド: 記録開始`);
 
-          if (!channel) {
-            await interaction.reply({
-              content: 'ボイスチャンネルに参加してから呼び出してください。',
-              ephemeral: true,
-            });
-            return;
-          }
-
-          this.#connection?.destroy();
-
-          const connection = joinVoiceChannel({
-            guildId: interaction.guildId,
-            channelId: channel.id,
-            adapterCreator: guild.voiceAdapterCreator,
-            selfMute: true,
-            selfDeaf: false,
-          });
-
-          const context = {};
-
-          // ユーザーの発話ごとに音声を記録
-          connection.receiver.speaking.on('start', async (userId) => {
-            if (context[userId]) {
-              return;
-            }
-
-            // 記録データ作成
-            const sessionId = uuid();
-            const userContext = {
-              sessionId,
-              channel: channel.id,
-              userId,
-              userName: guild.members.cache.get(userId).displayName,
-              start: dayjs().tz().format(),
-            };
-            context[userId] = userContext;
-
-            const pcmFile = path.join(process.env.WORKER_PATH, `${sessionId}.pcm`);
-
-            // キャプチャー開始
-            console.info(`[RecordAddon] キャプチャー開始: User<${userId}> Session<${sessionId}>`);
-            try {
-              await pipeline(
-                connection.receiver.subscribe(userId, {
-                  end: {
-                    behavior: EndBehaviorType.AfterSilence,
-                    duration: 3000,
-                  },
-                }),
-                new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }),
-                createWriteStream(pcmFile)
-              );
-              console.info(`[RecordAddon] キャプチャー終了: User<${userId}> Session<${sessionId}> --> ${pcmFile}`);
-
-            } catch (err) {
-              console.error(`[RecordAddon] キャプチャー失敗: User<${userId}> Session<${sessionId}>`, err);
-              return;
-
-            } finally {
-              delete context[userId];
-            }
-
-            // コンテキストを保存して音声変換ワーカーにキューイング
-            userContext['end'] = dayjs().tz().format();
-            userContext['transcription'] = null;
-
-            const firstWorkerPrefix = new PcmToWavWorker().prefix;
-
-            await this.#redisClient.multi()
-              .setEx(`context:${sessionId}`, 43200, JSON.stringify(userContext))
-              .zAdd(`sessions`, { score: dayjs(userContext.start).valueOf(), value: sessionId })
-              .lPush(`${firstWorkerPrefix}:queue`, sessionId)
-              .exec();
-
-            console.info('[RecordAddon] キャプチャー完了:', userContext);
-          });
-
-          this.#connection = connection;
-
+        if (!channel) {
           await interaction.reply({
-            content: `${channel} に参加しました。`,
+            content: 'ボイスチャンネルに参加してから呼び出してください。',
             ephemeral: true,
           });
+          return;
+        }
 
-          console.info(`[RecordAddon] Botが <${channel.name}> に参加しました。`);
-          break;
+        this.#connection?.destroy();
+        this.#contexts = {};
 
-        case 'record-end':
-          console.info(`[RecordAddon] <${guild.name}> コマンド: 記録終了`);
+        // Botをボイスチャンネルに参加させる
+        const connection = joinVoiceChannel({
+          guildId: interaction.guildId,
+          channelId: channel.id,
+          adapterCreator: guild.voiceAdapterCreator,
+          selfMute: true,
+          selfDeaf: false,
+        });
 
-          await interaction.reply({
-            content: 'OK',
-            ephemeral: true,
-          });
-
-          this.#connection?.disconnect();
-          break;
-
-        case 'record-view':
-          console.info(`[RecordAddon] <${guild.name}> コマンド: 文字起こし`);
-
-          // 指定範囲の文字起こしを取得
-          const now = dayjs().tz().format('YYYY-MM-DD');
-          const start = dayjs.tz(`${now}T${interaction.options.getString('start')}:00Z`);
-          const end = dayjs.tz(`${now}T${interaction.options.getString('end')}:00Z`);
-          const targetChannel = interaction.options.getChannel('channel');
-
-          await interaction.deferReply({ ephemeral: true });
-
-          const sessionIds = await this.#redisClient.zRangeByScore('sessions', start.valueOf(), end.valueOf());
-          if (sessionIds.length === 0) {
-            await interaction.editReply('該当期間の記録データがありません。');
-            break;
+        // ユーザーの発話ごとに音声を記録する
+        connection.receiver.speaking.on('start', async (userId) => {
+          if (!this.#contexts[userId]) {
+            await Promise.resolve()
+              .then(() => this.#capture({
+                sessionId: uuid(),
+                channelId: channel.id,
+                userId,
+                userName: guild.members.cache.get(userId).displayName,
+                start: dayjs().tz().format(),
+              }))
+              .then(context => this.#enqueueConvertWorker(context));
           }
+        });
 
-          /** @type {Array} */
-          const contexts = await this.#redisClient.mGet(sessionIds.map(id => `context:${id}`))
-            .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
-            .then(contexts => contexts.filter(context => context?.channel === targetChannel.id));
+        this.#connection = connection;
 
-          if (contexts.length === 0) {
-            await interaction.editReply('該当期間の該当チャンネルの記録データがありません。');
-            break;
-          }
-          if (contexts.some(context => !context.transcription)) {
-            await interaction.editReply('該当期間の一部が処理中です。しばらく待ってから再度実行してください。');
-            break;
-          }
+        await interaction.reply({
+          content: `${channel} に参加しました。`,
+          ephemeral: true,
+        });
 
-          const text = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} ${targetChannel} にて:\n\n` +
-            contexts
-              .map(context => `[${dayjs.tz(context.start).format('HH:mm')}] ${context.userName}「${context.transcription}」`)
-              .join('\n');
+        console.info(`[RecordAddon] Botが <${channel.name}> に参加しました。`);
+      }
 
-          await interaction.editReply(text);
-          break;
+      // 記録終了コマンド
+      if (interaction.commandName === 'record-end') {
+        console.info(`[RecordAddon] <${guild.name}> コマンド: 記録終了`);
 
-        case 'record-summary':
-          // 指定範囲の要約
-          // const now = new Date();
-          // const start = new Date(`${now.toLocaleDateString()} ${interaction.options.getString('start')}`);
-          // const end = new Date(`${now.toLocaleDateString()} ${interaction.options.getString('end')}`);
-          // const targetChannel = interaction.options.getChannel('channel');
+        await interaction.reply({
+          content: 'OK',
+          ephemeral: true,
+        });
 
-          // await interaction.deferReply();
-          // TODO: Redisから指定範囲の文字起こしを取得 > Open WebUI API 経由で要約
-          // await interaction.editReply(text);
-          break;
+        this.#connection?.disconnect();
+        console.info(`[RecordAddon] Botが <${channel.name}> から退出しました。`);
+      }
+
+      // 指定範囲の文字起こし取得コマンド
+      if (interaction.commandName === 'record-view') {
+        console.info(`[RecordAddon] <${guild.name}> コマンド: 文字起こし`);
+
+        const now = dayjs().tz().format('YYYY-MM-DD');
+        const start = dayjs.tz(`${now}T${interaction.options.getString('start')}:00Z`);
+        const end = dayjs.tz(`${now}T${interaction.options.getString('end')}:00Z`);
+        const targetChannel = interaction.options.getChannel('channel');
+
+        await interaction.deferReply({ ephemeral: true });
+
+        const transcription = await this.#fetchTranscription(targetChannel, start, end);
+
+        if (transcription) {
+          await interaction.editReply(transcription);
+        } else {
+          await interaction.editReply('該当期間の記録データがありません。');
+        }
+      }
+
+      // 指定範囲の要約コマンド
+      if (interaction.commandName === 'record-summary') {
+        console.info(`[RecordAddon] <${guild.name}> コマンド: 要約`);
+
+        const now = dayjs().tz().format('YYYY-MM-DD');
+        const start = dayjs.tz(`${now}T${interaction.options.getString('start')}:00Z`);
+        const end = dayjs.tz(`${now}T${interaction.options.getString('end')}:00Z`);
+        const targetChannel = interaction.options.getChannel('channel');
+
+        await interaction.deferReply({ ephemeral: true });
+
+        const summary = await this.#summarize(targetChannel, start, end);
+
+        if (summary) {
+          await interaction.editReply(summary);
+        } else {
+          await interaction.editReply('該当期間の記録データがありません。');
+        }
       }
     });
 
@@ -307,10 +260,136 @@ class RecordAddon extends Addon {
 
         if (members.size === 0) {
           this.#connection?.disconnect();
-          console.info('[RecordAddon] Botが退出しました。');
+          console.info(`[RecordAddon] Botが <${currentChannel.name}> 退出しました。`);
         }
       }
     });
+  }
+
+  /**
+   * ユーザーの音声をキャプチャーします。
+   * @param {VoiceConnection} connection
+   * @param {Object} context
+   * @returns {Promise<Object>}
+   */
+  async #capture(connection, context) {
+    const { sessionId, userId } = context;
+    const pcmFile = path.join(process.env.WORKER_PATH, `${sessionId}.pcm`);
+
+    try {
+      console.info(`[RecordAddon] キャプチャー開始: User<${userId}> Session<${sessionId}>`);
+      this.#contexts[userId] = context;
+
+      await pipeline(
+        connection.receiver.subscribe(userId, {
+          end: {
+            behavior: EndBehaviorType.AfterSilence,
+            duration: 3000,
+          },
+        }),
+        new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }),
+        createWriteStream(pcmFile)
+      );
+
+      console.info(`[RecordAddon] キャプチャー終了: User<${userId}> Session<${sessionId}> --> ${pcmFile}`);
+
+    } catch (err) {
+      console.error(`[RecordAddon] キャプチャー失敗: User<${userId}> Session<${sessionId}>`, err);
+      return;
+
+    } finally {
+      delete this.#contexts[userId];
+    }
+
+    return context;
+  }
+
+  /**
+   * キャプチャー結果を音声変換ワーカーにキューイングします。
+   * @param {Object} context
+   * @returns {Promise<void>}
+   */
+  async #enqueueConvertWorker(context) {
+    const { sessionId, start } = context;
+    const workerPrefix = new ConvertWorker().prefix;
+
+    await this.#redisClient.multi()
+      .setEx(`context:${sessionId}`, 43200, JSON.stringify(context))
+      .zAdd(`sessions`, { score: dayjs(start).valueOf(), value: sessionId })
+      .lPush(`${workerPrefix}:queue`, sessionId)
+      .exec();
+  }
+
+  /**
+   * 指定時間範囲の文字起こしを取得します。
+   * @param {VoiceChannel} channel
+   * @param {dayjs.Dayjs} start
+   * @param {dayjs.Dayjs} end
+   * @returns {string|null}
+   */
+  async #fetchTranscription(channel, start, end) {
+    const sessionIds = await this.#redisClient.zRangeByScore('sessions', start.valueOf(), end.valueOf());
+    if (sessionIds.length === 0) {
+      console.info('[RecordAddon] 該当期間の記録データがありません。');
+      return null;
+    }
+
+    /** @type {Array} */
+    const contexts = await this.#redisClient.mGet(sessionIds.map(id => `context:${id}`))
+      .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
+      .then(contexts => contexts.filter(context => context?.channelId === channel.id));
+
+    if (contexts.length === 0) {
+      console.info('[RecordAddon] 該当期間の該当チャンネルの記録データがありません。');
+      return null;
+    }
+    if (contexts.some(context => !context.transcription)) {
+      console.info('[RecordAddon] 該当期間の一部が文字起こし処理中です。');
+      return null;
+    }
+
+    const header = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} ${channel} にて:`;
+    const lines = contexts.map(context => `[${dayjs.tz(context.start).format('HH:mm')}] ${context.userName}「${context.transcription}」`);
+
+    return header + '\n\n' + lines.join('\n');
+  }
+
+  /**
+   * 指定時間範囲の文字起こしを取得します。
+   * @param {VoiceChannel} channel
+   * @param {dayjs.Dayjs} start
+   * @param {dayjs.Dayjs} end
+   * @returns {string|null}
+   */
+  async #summarize(channel, start, end) {
+    const transcription = this.#fetchTranscription(channel, start, end);
+    if (!transcription) {
+      return null;
+    }
+
+    const { data } = await axios.post(`${process.env.OPEN_WEBUI_HOST}/api/chat/completions`,
+      {
+        model: 'summarize',
+        messages: [
+          {
+            role: 'user',
+            content: transcription,
+          },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPEN_WEBUI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const summary = data.choices[0]?.message?.content;
+
+    console.log(`[RecordAddon] トークン消費:`, data.usage);
+
+    return summary;
   }
 }
 

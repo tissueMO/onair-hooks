@@ -30,4 +30,4 @@ process
   });
 
 // ログインして待ち受け開始
-client.login(process.env.TOKEN);
+client.login(process.env.DISCORD_TOKEN);
