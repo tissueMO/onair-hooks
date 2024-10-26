@@ -129,11 +129,7 @@ class ShuffleAddon extends Addon {
 
         case 'shuffle':
           console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル`);
-          await interaction.reply({
-            content: 'OK',
-            ephemeral: true,
-          });
-
+          await interaction.reply({ content: 'OK' });
           await this.#shuffle(guild);
           break;
       }

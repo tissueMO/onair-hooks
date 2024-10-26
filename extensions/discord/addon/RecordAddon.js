@@ -176,7 +176,7 @@ class RecordAddon extends Addon {
           if (!this.#contexts[userId]) {
             await Promise.resolve()
               .then(() => this.#capture(connection, {
-                sessionId: uuid(),
+                contextId: uuid(),
                 channelId: channel.id,
                 userId,
                 userName: guild.members.cache.get(userId).displayName,
@@ -273,11 +273,11 @@ class RecordAddon extends Addon {
    * @returns {Promise<Object>}
    */
   async #capture(connection, context) {
-    const { sessionId, userId } = context;
-    const pcmFile = path.join(process.env.WORKER_PATH, `${sessionId}.pcm`);
+    const { contextId, userId } = context;
+    const pcmFile = path.join(process.env.WORKER_PATH, `${contextId}.pcm`);
 
     try {
-      console.info(`[RecordAddon] キャプチャー開始: User<${userId}> Session<${sessionId}>`);
+      console.info(`[RecordAddon] キャプチャー開始: User<${userId}> Session<${contextId}>`);
       this.#contexts[userId] = context;
 
       await pipeline(
@@ -291,10 +291,10 @@ class RecordAddon extends Addon {
         createWriteStream(pcmFile)
       );
 
-      console.info(`[RecordAddon] キャプチャー終了: User<${userId}> Session<${sessionId}> --> ${pcmFile}`);
+      console.info(`[RecordAddon] キャプチャー終了: User<${userId}> Session<${contextId}> --> ${pcmFile}`);
 
     } catch (err) {
-      console.error(`[RecordAddon] キャプチャー失敗: User<${userId}> Session<${sessionId}>`, err);
+      console.error(`[RecordAddon] キャプチャー失敗: User<${userId}> Session<${contextId}>`, err);
       return;
 
     } finally {
@@ -310,13 +310,13 @@ class RecordAddon extends Addon {
    * @returns {Promise<void>}
    */
   async #enqueueConvertWorker(context) {
-    const { sessionId, start } = context;
+    const { contextId, start } = context;
     const workerPrefix = new ConvertWorker().prefix;
 
     await this.#redisClient.multi()
-      .setEx(`context:${sessionId}`, 43200, JSON.stringify(context))
-      .zAdd(`sessions`, { score: dayjs(start).valueOf(), value: sessionId })
-      .lPush(`${workerPrefix}:queue`, sessionId)
+      .setEx(`context:${contextId}`, 43200, JSON.stringify(context))
+      .zAdd(`contexts`, { score: dayjs(start).valueOf(), value: contextId })
+      .lPush(`${workerPrefix}:queue`, contextId)
       .exec();
   }
 
@@ -328,14 +328,14 @@ class RecordAddon extends Addon {
    * @returns {string|null}
    */
   async #fetchTranscription(channel, start, end) {
-    const sessionIds = await this.#redisClient.zRangeByScore('sessions', start.valueOf(), end.valueOf());
-    if (sessionIds.length === 0) {
+    const contextIds = await this.#redisClient.zRangeByScore('contexts', start.valueOf(), end.valueOf());
+    if (contextIds.length === 0) {
       console.info('[RecordAddon] 該当期間の記録データがありません。');
       return null;
     }
 
     /** @type {Array} */
-    const contexts = await this.#redisClient.mGet(sessionIds.map(id => `context:${id}`))
+    const contexts = await this.#redisClient.mGet(contextIds.map(id => `context:${id}`))
       .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
       .then(contexts => contexts.filter(context => context?.channelId === channel.id));
 

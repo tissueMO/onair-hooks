@@ -36,7 +36,6 @@ class ConvertWorker extends Worker {
       // 変換実行
       const srcFile = path.join(process.env.WORKER_PATH, `${id}.pcm`);
       const destFile = path.join(process.env.WORKER_PATH, `${id}.mp3`);
-
       await this.#pcmToMp3(srcFile, destFile);
 
       // 次のキューへ登録
