@@ -4,6 +4,7 @@
   "author": "tissueMO",
   "private": true,
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.682.0",
     "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.17.0",
     "axios": "^0.27.2",
@@ -19,7 +20,9 @@
   "scripts": {
     "dev": "yarn && node index.js",
     "build": " tar --exclude 'node_modules' --exclude '.env*' --exclude 'config.example.js' --exclude '.gitignore' --exclude 'docker-compose.yml' -cvf ../onair-hooks-discord-extension.tar .",
-    "worker:convert": "node worker.js --worker convert",
-    "worker:transcribe": "node worker.js --worker transcribe"
+    "convert": "node worker.js --worker convert --once",
+    "transcribe": "node worker.js --worker transcribe --once",
+    "start:convert": "node worker.js --worker convert",
+    "start:transcribe": "node worker.js --worker transcribe"
   }
 }

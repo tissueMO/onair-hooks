@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 from faster_whisper import WhisperModel
 
 # モデル選択
-model = WhisperModel(os.environ["WHISPER_MODEL"])
+model = WhisperModel(os.environ["WHISPER_MODEL"], device="cpu", compute_type="int8")
 
 # Webサーバー
 app = Flask(__name__)

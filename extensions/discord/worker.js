@@ -10,6 +10,10 @@ const parsedArgs = parseArgs({
 			type: 'string',
 			multiple: false,
 		},
+		once: {
+			type: 'boolean',
+			multiple: false,
+		},
 	}
 })
 
@@ -26,4 +30,8 @@ if (parsedArgs.values.worker === 'transcribe') {
 }
 
 // ワーカー開始
-manager.start();
+if (parsedArgs.values.once) {
+	manager.once().finally(() => process.exit());
+} else {
+	manager.start();
+}

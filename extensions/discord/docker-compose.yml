@@ -16,11 +16,9 @@ services:
       - worker-data:/tmp/worker
     env_file:
       - .env
-    environment:
-      WORKER_PATH: /tmp/worker
   worker_convert:
     build: .
-    command: ['yarn', 'run', 'worker:convert']
+    command: ['yarn', 'run', 'start:convert']
     tty: true
     depends_on:
       - redis
@@ -32,11 +30,9 @@ services:
       - /tmp
     env_file:
       - .env
-    environment:
-      WORKER_PATH: /tmp/worker
   worker_transcribe:
     build: .
-    command: ['yarn', 'run', 'worker:transcribe']
+    command: ['yarn', 'run', 'start:transcribe']
     tty: true
     depends_on:
       - redis
@@ -49,8 +45,6 @@ services:
       - /tmp
     env_file:
       - .env
-    environment:
-      WORKER_PATH: /tmp/worker
   whisper:
     build: whisper
     ports:
@@ -58,7 +52,7 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./whisper:/app
+      - ./whisper:/app/src
     tmpfs:
       - /tmp
     env_file:
