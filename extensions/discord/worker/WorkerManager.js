@@ -38,6 +38,16 @@ class WorkerManager {
       }
     }));
   }
+
+  /**
+   * ワーカーを一度だけ実行します。
+   */
+  async once() {
+    await Promise.all(this.#workers.map(async worker => {
+      await worker.initialize();
+      await worker.process();
+    }));
+  }
 }
 
 module.exports = WorkerManager;
