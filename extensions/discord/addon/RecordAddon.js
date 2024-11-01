@@ -327,9 +327,9 @@ class RecordAddon extends Addon {
     const workerPrefix = new ConvertWorker().prefix;
 
     await this.#redisClient.multi()
-      .setEx(`context:${contextId}`, 43200, JSON.stringify(context))
-      .zAdd(`contexts`, { score: dayjs(start).valueOf(), value: contextId })
-      .lPush(`${workerPrefix}:queue`, contextId)
+      .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, 43200, JSON.stringify(context))
+      .zAdd(`${process.env.REDIS_NAMESPACE}:contexts`, { score: dayjs(start).valueOf(), value: contextId })
+      .lPush(`${process.env.REDIS_NAMESPACE}:${workerPrefix}:queue`, contextId)
       .exec();
   }
 
@@ -341,14 +341,14 @@ class RecordAddon extends Addon {
    * @returns {string|null}
    */
   async #fetchTranscription(channel, start, end) {
-    const contextIds = await this.#redisClient.zRangeByScore('contexts', start.valueOf(), end.valueOf());
+    const contextIds = await this.#redisClient.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, start.valueOf(), end.valueOf());
     if (contextIds.length === 0) {
       console.info('[RecordAddon] 該当期間の記録データがありません。');
       return null;
     }
 
     /** @type {Array} */
-    const contexts = await this.#redisClient.mGet(contextIds.map(id => `context:${id}`))
+    const contexts = await this.#redisClient.mGet(contextIds.map(id => `${process.env.REDIS_NAMESPACE}:context:${id}`))
       .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
       .then(contexts => contexts.filter(context => context?.channelId === channel.id));
 

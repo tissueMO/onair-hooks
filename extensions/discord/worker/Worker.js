@@ -44,7 +44,7 @@ class Worker {
    * @returns {Promise<string>}
    */
   async dequeue() {
-    return this.redisClient.rPop(`${this.prefix}:queue`);
+    return this.redisClient.rPop(`${process.env.REDIS_NAMESPACE}:${this.prefix}:queue`);
   }
 
   /**
