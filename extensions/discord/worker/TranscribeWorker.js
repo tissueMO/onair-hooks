@@ -53,7 +53,7 @@ class TranscribeWorker extends Worker {
       }));
 
       // コンテキストに文字起こし結果を反映
-      const context = await this.redisClient.get(`context:${id}`)
+      const context = await this.redisClient.get(`${process.env.REDIS_NAMESPACE}:context:${id}`)
         .then(context => context ? JSON.parse(context) : null);
 
       if (!context) {
@@ -63,7 +63,7 @@ class TranscribeWorker extends Worker {
 
       context['transcription'] = responseData['transcription'] ?? '(文字起こし失敗)';
 
-      await this.redisClient.setEx(`context:${id}`, 43200, JSON.stringify(context));
+      await this.redisClient.setEx(`${process.env.REDIS_NAMESPACE}:context:${id}`, 43200, JSON.stringify(context));
 
       console.info(`<${this.prefix}> ID: ${id} の文字起こし完了`);
     }

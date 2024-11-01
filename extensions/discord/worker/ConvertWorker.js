@@ -56,7 +56,7 @@ class ConvertWorker extends Worker {
       await this.#pcmToMp3(srcFile, destFile);
 
       // 次のキューへ登録
-      await this.redisClient.lPush(`${this.nextWorkerPrefix}:queue`, id);
+      await this.redisClient.lPush(`${process.env.REDIS_NAMESPACE}:${this.nextWorkerPrefix}:queue`, id);
 
       await s3Client.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
