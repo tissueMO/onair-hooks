@@ -1,10 +1,10 @@
 const { default: axios } = require('axios');
-const fs = require('fs').promises;
-const path = require('path');
 const FormData = require('form-data');
 const { Agent } = require('http');
 const Worker = require('./Worker');
-const { createReadStream } = require('fs');
+const { DeleteObjectCommand, GetObjectCommand, S3Client } = require('@aws-sdk/client-s3');
+
+const s3Client = new S3Client();
 
 const whisperClient = axios.create({
   baseURL: process.env.WHISPER_HOST,
@@ -33,15 +33,24 @@ class TranscribeWorker extends Worker {
     for (const id of ids) {
       console.info(`<${this.prefix}> ID: ${id} の変換開始...`);
 
+      // 処理対象のデータを取得
+      const baseName = `${id}.mp3`;
+      const { Body: srcData } = await s3Client.send(new GetObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: `${process.env.S3_PREFIX}${baseName}`,
+      }));
+
       // 文字起こし実行
-      const file = path.join(process.env.WORKER_PATH, `${id}.mp3`);
       const requestData = new FormData();
-      requestData.append('file', createReadStream(file));
+      requestData.append('file', srcData);
 
       const { data: responseData } = await whisperClient.post('/transcribe', requestData, { headers: requestData.getHeaders() });
 
       // 後片付け
-      await fs.unlink(file);
+      await s3Client.send(new DeleteObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: `${process.env.S3_PREFIX}${baseName}`,
+      }));
 
       // コンテキストに文字起こし結果を反映
       const context = await this.redisClient.get(`context:${id}`)

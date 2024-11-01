@@ -1,9 +1,10 @@
 const { Client, Guild, CommandInteraction, VoiceChannel, ChannelType, ApplicationCommandOptionType } = require('discord.js');
 const { joinVoiceChannel, EndBehaviorType, VoiceConnection } = require('@discordjs/voice');
 const Addon = require('./Addon');
-const { createWriteStream } = require('fs');
+const { createWriteStream, createReadStream } = require('fs');
 const { pipeline } = require('stream/promises');
 const { v4: uuid } = require('uuid');
+const fs = require('fs').promises;
 const path = require('path');
 const prism = require('prism-media');
 const { createRedisClient } = require('../common');
@@ -13,10 +14,13 @@ const dayjs = require('dayjs');
 const timezone = require('dayjs/plugin/timezone');
 const utc = require('dayjs/plugin/utc');
 const { default: axios } = require('axios');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.tz.setDefault('Asia/Tokyo');
+
+const s3Client = new S3Client();
 
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
@@ -274,7 +278,8 @@ class RecordAddon extends Addon {
    */
   async #capture(connection, context) {
     const { contextId, userId } = context;
-    const pcmFile = path.join(process.env.WORKER_PATH, `${contextId}.pcm`);
+    const baseName = `${contextId}.pcm`;
+    const pcmFile = path.join(process.env.WORKER_PATH, baseName);
 
     try {
       console.info(`[RecordAddon] キャプチャー開始: User<${userId}> Session<${contextId}>`);
@@ -284,18 +289,26 @@ class RecordAddon extends Addon {
         connection.receiver.subscribe(userId, {
           end: {
             behavior: EndBehaviorType.AfterSilence,
-            duration: 3000,
+            duration: 1000,
           },
         }),
         new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }),
         createWriteStream(pcmFile)
       );
 
+      await s3Client.send(new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: `${process.env.S3_PREFIX}${baseName}`,
+        Body: createReadStream(pcmFile),
+      }));
+
+      await fs.unlink(pcmFile);
+
       console.info(`[RecordAddon] キャプチャー終了: User<${userId}> Session<${contextId}> --> ${pcmFile}`);
 
     } catch (err) {
       console.error(`[RecordAddon] キャプチャー失敗: User<${userId}> Session<${contextId}>`, err);
-      return;
+      return null;
 
     } finally {
       delete this.#contexts[userId];
