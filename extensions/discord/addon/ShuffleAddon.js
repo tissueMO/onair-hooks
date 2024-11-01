@@ -83,7 +83,7 @@ class ShuffleAddon extends Addon {
   async initialize(client, guild) {
     super.initialize(client, guild);
 
-    await ShuffleAddon.#loadConfig();
+    await ShuffleAddon.#loadConfig(client);
 
     // スラッシュコマンドを追加
     if (this.settings[guild.id].length > 0) {
@@ -138,8 +138,9 @@ class ShuffleAddon extends Addon {
 
   /**
    * 永続化したシャッフル設定をロードします。
+   * @param {Client} client
    */
-  static async #loadConfig() {
+  static async #loadConfig(client) {
     ShuffleAddon.#channels = {};
 
     let data;
