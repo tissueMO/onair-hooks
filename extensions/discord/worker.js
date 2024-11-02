@@ -31,7 +31,7 @@ if (parsedArgs.values.worker === 'transcribe') {
 
 // ワーカー開始
 if (parsedArgs.values.once) {
-	manager.once().finally(() => process.exit());
+	manager.once().then(() => process.exit());
 } else {
 	manager.start();
 }
