@@ -7,6 +7,7 @@ module.exports = {
   records: [
     {
       guildId: '111111111111111111',
+      expires: 43200,
     },
   ],
   hooks: [

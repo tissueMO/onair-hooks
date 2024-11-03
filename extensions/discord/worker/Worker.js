@@ -35,8 +35,26 @@ class Worker {
 
   /**
    * 1回分の処理を実行します。
+   * @param {string} id
    */
-  async process() {
+  async process(id) {
+  }
+
+  /**
+   * ワーカーキューにデータを登録します。
+   * @param {string[]} ids
+   * @returns {Promise<void>}
+   */
+  async enqueue(ids) {
+    if (!ids.length) {
+      return;
+    }
+
+    const multi = worker.redisClient.multi();
+    for (const id of ids) {
+      multi.lPush(`${process.env.REDIS_NAMESPACE}:${this.prefix}:queue`, id);
+    }
+    await multi.exec();
   }
 
   /**

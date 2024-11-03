@@ -22,6 +22,8 @@ dayjs.tz.setDefault('Asia/Tokyo');
 
 const s3Client = new S3Client();
 
+const DEFAULT_EXPIRES = 43200;
+
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
  */
@@ -148,6 +150,9 @@ class RecordAddon extends Addon {
         return;
       }
 
+      // 古いデータをクリア
+      await this.#clean(guild.id);
+
       /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
       const channel = interaction.member.voice?.channel;
 
@@ -181,6 +186,7 @@ class RecordAddon extends Addon {
             await Promise.resolve()
               .then(() => this.#capture(connection, {
                 contextId: uuid(),
+                guildId: guild.id,
                 channelId: channel.id,
                 userId,
                 userName: guild.members.cache.get(userId).displayName,
@@ -323,11 +329,11 @@ class RecordAddon extends Addon {
    * @returns {Promise<void>}
    */
   async #enqueueConvertWorker(context) {
-    const { contextId, start } = context;
+    const { contextId, guildId, start } = context;
     const workerPrefix = new ConvertWorker().prefix;
 
     await this.#redisClient.multi()
-      .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, 43200, JSON.stringify(context))
+      .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, this.settings[guildId]?.expires ?? DEFAULT_EXPIRES, JSON.stringify(context))
       .zAdd(`${process.env.REDIS_NAMESPACE}:contexts`, { score: dayjs(start).valueOf(), value: contextId })
       .lPush(`${process.env.REDIS_NAMESPACE}:${workerPrefix}:queue`, contextId)
       .exec();
@@ -403,9 +409,34 @@ class RecordAddon extends Addon {
 
     const summary = data.choices[0]?.message?.content;
 
-    console.log(`[RecordAddon] トークン消費:`, data.usage);
+    console.log(`[RecordAddon] OpenAIトークン消費:`, data.usage);
 
     return summary;
+  }
+
+  /**
+   * 期限切れのコンテキストを一括削除します。
+   * @param {string} guildId
+   * @returns {Promiose<void>}
+   */
+  async #clean(guildId) {
+    // 対象取得
+    const limit = dayjs().tz().subtract(this.settings[guildId]?.expires ?? DEFAULT_EXPIRES, 'second');
+    const contextIds = await this.#redisClient.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, 0, limit.valueOf());
+    if (!contextIds.length) {
+      console.info(`[RecordAddon] 有効期限切れのコンテキストはありません。`);
+      return;
+    }
+
+    // 一括削除
+    const multi = this.#redisClient.multi();
+    for (const contextId of contextIds) {
+      multi.del(`${process.env.REDIS_NAMESPACE}:context:${contextId}`);
+    }
+    multi.zRemRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, 0, limit.valueOf());
+    await multi.exec();
+
+    console.info(`[RecordAddon] 有効期限切れのコンテキスト: ${contextIds.length}件 を削除しました。`);
   }
 }
 

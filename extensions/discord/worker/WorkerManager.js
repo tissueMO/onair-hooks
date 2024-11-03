@@ -28,12 +28,7 @@ class WorkerManager {
       await worker.initialize();
 
       while (true) {
-        try {
-          await worker.process();
-        } catch (err) {
-          console.error(`[ERROR] <${worker.prefix}>`, err);
-        }
-
+        await this.#process(worker);
         await setTimeout(1000);
       }
     }));
@@ -45,8 +40,30 @@ class WorkerManager {
   async once() {
     await Promise.all(this.#workers.map(async worker => {
       await worker.initialize();
-      await worker.process();
+      await this.#process(worker);
     }));
+  }
+
+  /**
+   * ワーカーの処理を一度実行し、失敗した場合は復旧を試みます。
+   * @param {Worker} worker
+   */
+  async #process(worker) {
+    const ids = await worker.dequeueAll();
+    const failedIds = [];
+
+    // 1件ずつ処理
+    for (const id of ids) {
+      try {
+        await worker.process(id);
+      } catch (err) {
+        console.error(`[ERROR] <${worker.prefix}>`, err);
+        failedIds.push(id);
+      }
+    }
+
+    // 失敗したIDをキューに戻す
+    await worker.enqueue(failedIds);
   }
 }
 
