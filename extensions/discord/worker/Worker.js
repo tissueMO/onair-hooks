@@ -50,7 +50,7 @@ class Worker {
       return;
     }
 
-    const multi = worker.redisClient.multi();
+    const multi = this.redisClient.multi();
     for (const id of ids) {
       multi.lPush(`${process.env.REDIS_NAMESPACE}:${this.prefix}:queue`, id);
     }
