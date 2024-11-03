@@ -362,7 +362,7 @@ class RecordAddon extends Addon {
       console.info('[RecordAddon] 該当期間の該当チャンネルの記録データがありません。');
       return null;
     }
-    if (contexts.some(context => !context.transcription)) {
+    if (contexts.some(context => context?.transcription === undefined)) {
       console.info('[RecordAddon] 該当期間の一部が文字起こし処理中です。');
       return null;
     }
