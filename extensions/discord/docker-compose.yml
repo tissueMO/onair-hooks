@@ -36,23 +36,10 @@ services:
     tty: true
     depends_on:
       - redis
-      - whisper
     volumes:
       - ./:/app
       - ./node_modules:/app/node_modules
       - worker-data:/tmp/worker
-    tmpfs:
-      - /tmp
-    env_file:
-      - .env
-  whisper:
-    build: whisper
-    ports:
-      - 5000:5000
-    security_opt:
-      - seccomp:unconfined
-    volumes:
-      - ./whisper:/app/src
     tmpfs:
       - /tmp
     env_file:

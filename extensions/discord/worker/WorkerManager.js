@@ -52,9 +52,11 @@ class WorkerManager {
     const ids = await worker.dequeueAll();
     const failedIds = [];
 
-    console.info(`<${worker.prefix}> 処理対象=${ids.length}件`);
-
     // 1件ずつ処理
+    if (ids.length > 0) {
+      console.info(`<${worker.prefix}> 処理対象=${ids.length}件`);
+    }
+
     for (const id of ids) {
       try {
         await worker.process(id);
@@ -65,8 +67,10 @@ class WorkerManager {
     }
 
     // 失敗したIDをキューに戻す
-    console.info(`<${worker.prefix}> 失敗数=${failedIds.length}件`);
-    await worker.enqueue(failedIds);
+    if (failedIds.length > 0) {
+      console.info(`<${worker.prefix}> 失敗数=${failedIds.length}件`);
+      await worker.enqueue(failedIds);
+    }
   }
 }
 
