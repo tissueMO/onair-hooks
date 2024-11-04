@@ -233,7 +233,13 @@ class RecordAddon extends Addon {
         const transcription = await this.#fetchTranscription(targetChannel, start, end);
 
         if (transcription) {
-          await interaction.editReply(transcription);
+          // 添付ファイルとして送信
+          const file = `/tmp/${uuid()}.log`;
+          await fs.writeFile(file, transcription, { encoding: 'utf8' });
+          await interaction.channel.send({ files: [file] });
+          await fs.unlink(file);
+
+          await interaction.editReply('OK');
         } else {
           await interaction.editReply('該当期間の記録データがありません。');
         }
@@ -253,7 +259,8 @@ class RecordAddon extends Addon {
         const summary = await this.#summarize(targetChannel, start, end);
 
         if (summary) {
-          await interaction.editReply(summary);
+          await interaction.channel.send(summary);
+          await interaction.editReply('OK');
         } else {
           await interaction.editReply('該当期間の記録データがありません。');
         }
@@ -381,7 +388,7 @@ class RecordAddon extends Addon {
    * @param {VoiceChannel} channel
    * @param {dayjs.Dayjs} start
    * @param {dayjs.Dayjs} end
-   * @returns {string|null}
+   * @returns {Promise<string|null>}
    */
   async #summarize(channel, start, end) {
     const transcription = await this.#fetchTranscription(channel, start, end);
