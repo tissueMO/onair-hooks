@@ -374,8 +374,8 @@ class RecordAddon extends Addon {
       return null;
     }
 
-    const now = dayjs().tz().format('YYYY-MM-DD');
-    const header = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} ${channel} にて:`;
+    const now = dayjs().tz().format('YYYY/MM/DD');
+    const header = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} <${channel.name}> にて:`;
     const lines = contexts
       .map(context => ({ ...context, transcription: context.transcription.replace(/\n/g, '。') }))
       .map(context => `[${dayjs(context.start).tz().format('HH:mm')}] ${context.userName}「${context.transcription}」`);
@@ -384,7 +384,7 @@ class RecordAddon extends Addon {
   }
 
   /**
-   * 指定時間範囲の文字起こしを取得します。
+   * 指定時間範囲の要約を取得します。
    * @param {VoiceChannel} channel
    * @param {dayjs.Dayjs} start
    * @param {dayjs.Dayjs} end
@@ -414,11 +414,13 @@ class RecordAddon extends Addon {
       }
     );
 
-    const summary = data.choices[0]?.message?.content;
-
     console.log(`[RecordAddon] OpenAIトークン消費:`, data.usage);
 
-    return summary;
+    const now = dayjs().tz().format('YYYY/MM/DD');
+    const header = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} <${channel.name}> にて:`;
+    const summary = data.choices[0]?.message?.content ?? '(要約できませんでした)';
+
+    return header + '\n\n' + summary;
   }
 
   /**
