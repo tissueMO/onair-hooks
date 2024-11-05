@@ -192,7 +192,11 @@ class RecordAddon extends Addon {
                 userName: guild.members.cache.get(userId).displayName,
                 start: dayjs().tz().format(),
               }))
-              .then(context => this.#enqueueConvertWorker(context));
+              .then(context => {
+                if (context) {
+                  this.#enqueueConvertWorker(context);
+                }
+              });
           }
         });
 
@@ -309,25 +313,35 @@ class RecordAddon extends Addon {
         createWriteStream(pcmFile)
       );
 
+      context['end'] = dayjs().tz().format();
+
+      // ※相槌やノイズのような短い音声は除外
+      const start = dayjs(context.start);
+      const end = dayjs(context.end);
+
+      if (end.diff(start, 'second') <= 3) {
+        console.info(`[RecordAddon] キャプチャーキャンセル: User<${userId}> Session<${contextId}>`);
+        return null;
+      }
+
       await s3Client.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
         Key: `${process.env.S3_PREFIX}${baseName}`,
         Body: createReadStream(pcmFile),
       }));
 
-      await fs.unlink(pcmFile);
-
       console.info(`[RecordAddon] キャプチャー終了: User<${userId}> Session<${contextId}> --> ${pcmFile}`);
+      return context;
 
     } catch (err) {
       console.error(`[RecordAddon] キャプチャー失敗: User<${userId}> Session<${contextId}>`, err);
       return null;
 
     } finally {
+      await fs.unlink(pcmFile);
       delete this.#contexts[userId];
     }
 
-    return context;
   }
 
   /**
@@ -351,7 +365,7 @@ class RecordAddon extends Addon {
    * @param {VoiceChannel} channel
    * @param {dayjs.Dayjs} start
    * @param {dayjs.Dayjs} end
-   * @returns {string|null}
+   * @returns {Promise<string|null>}
    */
   async #fetchTranscription(channel, start, end) {
     const contextIds = await this.#redisClient.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, start.valueOf(), end.valueOf());

@@ -1,3 +1,4 @@
+const fs = require('fs').promises;
 const { default: axios } = require('axios');
 const { createWriteStream, createReadStream } = require('fs');
 const path = require('path');
@@ -52,6 +53,7 @@ class TranscribeWorker extends Worker {
     });
 
     // 後片付け
+    await fs.unlink(srcFile);
     await s3Client.send(new DeleteObjectCommand({
       Bucket: process.env.S3_BUCKET,
       Key: `${process.env.S3_PREFIX}${baseName}`,

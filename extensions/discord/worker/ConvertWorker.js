@@ -63,6 +63,7 @@ class ConvertWorker extends Worker {
 
     // 後片付け
     await fs.unlink(srcFile);
+    await fs.unlink(destFile);
 
     await s3Client.send(new DeleteObjectCommand({
       Bucket: process.env.S3_BUCKET,
