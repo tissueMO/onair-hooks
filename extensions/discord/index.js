@@ -4,30 +4,41 @@ const FollowAddon = require('./addon/FollowAddon');
 const ShuffleAddon = require('./addon/ShuffleAddon');
 const RecordAddon = require('./addon/RecordAddon');
 
-// Discord クライアント
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+// Discord クライアント起動
+const tokens = [process.env.DISCORD_TOKEN_1, process.env.DISCORD_TOKEN_2].filter(token => !!token);
+const clients = [];
 
-// 初回のみ実行
-client.once('ready', async () => {
-  [...client.guilds.cache.keys()].forEach(guildId => console.info(`Botは <${client.user.tag}@${client.guilds.cache.get(guildId).name}> でログインしています。`));
-});
+for (const token of tokens) {
+  const index = tokens.indexOf(token);
 
-// アドオン登録
-new HookAddon().register(client);
-new FollowAddon().register(client);
-new ShuffleAddon().register(client);
-new RecordAddon().register(client);
+  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+
+  // 初回のみ実行
+  client.once('ready', async () => {
+    [...client.guilds.cache.keys()].forEach(guildId => console.info(`Bot#${index + 1}は <${client.user.tag}@${client.guilds.cache.get(guildId).name}> でログインしています。`));
+  });
+
+  // アドオン登録
+  if (index === 0) {
+    new HookAddon().register(client);
+    new FollowAddon().register(client);
+    new ShuffleAddon().register(client);
+  }
+  new RecordAddon().register(client);
+
+  // ログインして待ち受け開始
+  client.login(token)
+
+  clients.push(client);
+}
 
 // 終了時にログアウト
 process
   .on('SIGINT', () => {
-    client.destroy();
+    clients.forEach(client => client.destroy());
     process.exit(1);
   })
   .on('SIGTERM', () => {
-    client.destroy();
+    clients.forEach(client => client.destroy());
     process.exit(0);
   });
-
-// ログインして待ち受け開始
-client.login(process.env.DISCORD_TOKEN);
