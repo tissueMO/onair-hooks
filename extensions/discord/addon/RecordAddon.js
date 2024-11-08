@@ -1,5 +1,5 @@
 const { Client, Guild, CommandInteraction, VoiceChannel, ChannelType, ApplicationCommandOptionType } = require('discord.js');
-const { joinVoiceChannel, EndBehaviorType, VoiceConnection } = require('@discordjs/voice');
+const { joinVoiceChannel, EndBehaviorType, VoiceConnection, createAudioPlayer, createAudioResource, StreamType } = require('@discordjs/voice');
 const Addon = require('./Addon');
 const { createWriteStream, createReadStream } = require('fs');
 const { pipeline } = require('stream/promises');
@@ -7,7 +7,7 @@ const { v4: uuid } = require('uuid');
 const fs = require('fs').promises;
 const path = require('path');
 const prism = require('prism-media');
-const { createRedisClient } = require('../common');
+const { createRedisClient, parseTime } = require('../common');
 const ConvertWorker = require('../worker/ConvertWorker');
 const { RedisClientType } = require('@redis/client');
 const dayjs = require('dayjs');
@@ -15,6 +15,7 @@ const timezone = require('dayjs/plugin/timezone');
 const utc = require('dayjs/plugin/utc');
 const { default: axios } = require('axios');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { setTimeout } = require('timers/promises');
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -34,7 +35,7 @@ class RecordAddon extends Addon {
   static #clients;
 
   /**
-   * @type {Object<string, VoiceConnection>}
+   * @type {Object}
    */
   static #connections;
 
@@ -56,6 +57,13 @@ class RecordAddon extends Addon {
       {
         name: 'record-start',
         description: 'ボイスチャンネルに議事録要約Botを参加させます。',
+        options: [
+          {
+            name: 'silent',
+            description: 'Botが退出しても要約を自動生成しません。',
+            type: ApplicationCommandOptionType.Boolean,
+          },
+        ],
       },
       {
         name: 'record-end',
@@ -119,6 +127,18 @@ class RecordAddon extends Addon {
           },
         ],
       },
+      {
+        name: 'speak',
+        description: '参加中のボイスチャンネル上で任意の文章を発話させます。',
+        options: [
+          {
+            name: 'text',
+            description: '発話内容',
+            type: ApplicationCommandOptionType.String,
+            required: true,
+          }
+        ],
+      },
     ];
   }
 
@@ -141,7 +161,9 @@ class RecordAddon extends Addon {
     RecordAddon.#clients.push(client);
 
     this.#contexts = {};
+    this.#redisClient = await createRedisClient();
 
+    // スラッシュコマンドはプライマリBotのみ有効とする
     if (client.user.id === process.env.PRIMARY_BOT_ID) {
       RecordAddon.#connections = {};
 
@@ -153,9 +175,6 @@ class RecordAddon extends Addon {
         console.info(`[RecordAddon] <${guild.name}> このサーバーでは無効です。`);
         return;
       }
-
-      // Redis 接続
-      this.#redisClient = await createRedisClient();
 
       // コマンドハンドリング ※一部先発クライアントが後発クライアントを操作するケースあり
       client.on('interactionCreate', async (/** @type {CommandInteraction} */ interaction) => {
@@ -202,7 +221,7 @@ class RecordAddon extends Addon {
             return;
           }
 
-          RecordAddon.#connections[botId]?.destroy();
+          RecordAddon.#connections[botId]?.connection?.destroy();
 
           // Botをボイスチャンネルに参加させる
           const connection = joinVoiceChannel({
@@ -234,7 +253,11 @@ class RecordAddon extends Addon {
             }
           });
 
-          RecordAddon.#connections[botId] = connection;
+          RecordAddon.#connections[botId] = {
+            connection: connection,
+            start: dayjs().tz().format(),
+            autoSummary: !interaction.options.getBoolean('silent'),
+          };
 
           await interaction.reply({
             content: `${channel} に参加しました。`,
@@ -272,17 +295,24 @@ class RecordAddon extends Addon {
           });
 
           // Bot切断
-          RecordAddon.#connections[botId]?.disconnect();
+          RecordAddon.#connections[botId]?.connection?.disconnect();
         }
 
         // 指定範囲の文字起こし取得コマンド
         if (interaction.commandName === 'record-view') {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 文字起こし`);
 
-          const now = dayjs().tz().format('YYYY-MM-DD');
-          const start = dayjs.tz(`${now}T${interaction.options.getString('start')}:00Z`);
-          const end = dayjs.tz(`${now}T${interaction.options.getString('end')}:00Z`);
+          const start = parseTime(interaction.options.getString('start'));
+          const end = parseTime(interaction.options.getString('end'));
           const targetChannel = interaction.options.getChannel('channel');
+
+          if (!start || !end) {
+            await interaction.reply({
+              content: '時刻は HH:mm 形式で入力してください。',
+              ephemeral: true,
+            });
+            return;
+          }
 
           await interaction.deferReply({ ephemeral: true });
 
@@ -305,10 +335,17 @@ class RecordAddon extends Addon {
         if (interaction.commandName === 'record-summary') {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 要約`);
 
-          const now = dayjs().tz().format('YYYY-MM-DD');
-          const start = dayjs.tz(`${now}T${interaction.options.getString('start')}:00Z`);
-          const end = dayjs.tz(`${now}T${interaction.options.getString('end')}:00Z`);
+          const start = parseTime(interaction.options.getString('start'));
+          const end = parseTime(interaction.options.getString('end'));
           const targetChannel = interaction.options.getChannel('channel');
+
+          if (!start || !end) {
+            await interaction.reply({
+              content: '時刻は HH:mm 形式で入力してください。',
+              ephemeral: true,
+            });
+            return;
+          }
 
           await interaction.deferReply({ ephemeral: true });
 
@@ -320,6 +357,37 @@ class RecordAddon extends Addon {
           } else {
             await interaction.editReply('該当期間の記録データがありません。');
           }
+        }
+
+        // 発話コマンド
+        if (interaction.commandName === 'speak') {
+          console.info(`[RecordAddon] <${guild.name}> コマンド: 発話`);
+
+          if (!channel) {
+            await interaction.reply({
+              content: 'ボイスチャンネルに参加してから呼び出してください。',
+              ephemeral: true,
+            });
+            return;
+          }
+
+          // Bot取得
+          const botId = channel.members.filter(member => member.user.bot).at(0)?.user?.id;
+          if (!botId) {
+            await interaction.reply({
+              content: '対象となるBotがいません。',
+              ephemeral: true,
+            });
+            return;
+          }
+
+          await interaction.reply({
+            content: 'OK',
+            ephemeral: true,
+          });
+
+          // 発話
+          await this.#speak(RecordAddon.#connections[botId]?.connection, interaction.options.getString('text'))
         }
       });
     }
@@ -334,17 +402,34 @@ class RecordAddon extends Addon {
         const members = channel.members.filter(member => !member.user.bot);
 
         if (members.size === 0) {
-          RecordAddon.#connections[botId]?.disconnect();
+          RecordAddon.#connections[botId]?.connection?.disconnect();
         }
       }
 
       // Bot自身が退出したときにコネクションを破棄する
       if (newState.id === botId && oldState.channelId !== null && newState.channelId === null) {
-        RecordAddon.#connections[botId]?.destroy();
+        const connection = RecordAddon.#connections[botId];
+        if (!connection) {
+          return;
+        }
+
+        const start = dayjs(connection.start).tz();
+        const end = dayjs().tz();
+        const autoSummary = connection.autoSummary;
+
+        connection.connection.destroy();
         delete RecordAddon.#connections[botId];
 
         const previousChannel = await oldState.guild.channels.fetch(oldState.channelId);
         console.info(`[RecordAddon] Botが <${previousChannel.name}> から退出しました。`);
+
+        // デフォルトチャンネルに対して一定時間後に要約呼び出し
+        if (autoSummary && process.env.DEFAULT_CHANNEL_ID) {
+          console.info(`[RecordAddon] 30秒後に要約します。`);
+          await setTimeout(30000);
+          const summary = await this.#summarize(previousChannel, start, end);
+          await client.channels.cache.get(process.env.DEFAULT_CHANNEL_ID).send(summary);
+        }
       }
     });
   }
@@ -380,8 +465,9 @@ class RecordAddon extends Addon {
       // ※相槌やノイズのような短い音声は除外
       const start = dayjs(context.start);
       const end = dayjs(context.end);
+      const timeSpan = end.diff(start, 'second');
 
-      if (end.diff(start, 'second') <= 3) {
+      if (timeSpan <= 3) {
         console.info(`[RecordAddon] キャプチャーキャンセル: User<${userId}> Session<${contextId}>`);
         return null;
       }
@@ -403,7 +489,6 @@ class RecordAddon extends Addon {
       await fs.unlink(pcmFile);
       delete this.#contexts[userId];
     }
-
   }
 
   /**
@@ -496,7 +581,7 @@ class RecordAddon extends Addon {
     const header = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} <${channel.name}> にて:`;
     const summary = data.choices[0]?.message?.content ?? '(要約できませんでした)';
 
-    return header + '\n\n' + summary;
+    return header + '\n\n' + summary.replace(/\*/g, '');
   }
 
   /**
@@ -535,6 +620,36 @@ class RecordAddon extends Addon {
       }
     }
     return null;
+  }
+
+  /**
+   * Botに任意の文字列を発話させます。
+   * @param {VoiceConnection} connection
+   * @param {string} text
+   * @return {Promise<void>}
+   */
+  async #speak(connection, text) {
+    // 文字列 → 音声
+    const { data: mp3 } = await axios.post(`${process.env.OPENAI_API_HOST}/v1/audio/speech`,
+      {
+        model: 'tts-1',
+        voice: 'nova',
+        respose_format: 'mp3',
+        input: text,
+        speed: 0.9,
+      },
+      {
+        responseType: 'stream',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+      }
+    );
+
+    // 発話
+    const player = createAudioPlayer();
+    connection.subscribe(player);
+    player.play(createAudioResource(mp3));
   }
 }
 

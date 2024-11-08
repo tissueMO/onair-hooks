@@ -1,5 +1,26 @@
 const { createClient } = require('redis');
 const { RedisClientType } = require('@redis/client');
+const dayjs = require('dayjs');
+const timezone = require('dayjs/plugin/timezone');
+const utc = require('dayjs/plugin/utc');
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault('Asia/Tokyo');
+
+/**
+ * 時刻文字列から日時オブジェクトを生成します。
+ * @param {string} time
+ * @returns {dayjs.Dayjs?}
+ */
+exports.parseTime = (time) => {
+  try {
+    const now = dayjs().tz().format('YYYY-MM-DD');
+    return dayjs.tz(`${now}T${time}:00Z`);
+  } catch (err) {
+    return null;
+  }
+};
 
 /**
  * 配列を指定した要素数ごとに区切って分割します。
