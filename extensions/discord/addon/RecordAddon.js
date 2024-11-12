@@ -63,6 +63,12 @@ class RecordAddon extends Addon {
             description: 'Botが退出しても要約を自動生成しません。',
             type: ApplicationCommandOptionType.Boolean,
           },
+          {
+            name: 'channel',
+            description: '参加チャンネル',
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildVoice],
+          },
         ],
       },
       {
@@ -186,7 +192,7 @@ class RecordAddon extends Addon {
         await this.#clean(guild.id);
 
         /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
-        const channel = interaction.member.voice?.channel;
+        const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
 
         // 文字起こし開始コマンド
         if (interaction.commandName === 'record-start') {
@@ -194,7 +200,7 @@ class RecordAddon extends Addon {
 
           if (!channel) {
             await interaction.reply({
-              content: 'ボイスチャンネルに参加してから呼び出してください。',
+              content: 'ボイスチャンネルに参加してから呼び出すか、チャンネルを指定してください。',
               ephemeral: true,
             });
             return;
@@ -273,7 +279,7 @@ class RecordAddon extends Addon {
 
           if (!channel) {
             await interaction.reply({
-              content: 'ボイスチャンネルに参加してから呼び出してください。',
+              content: 'ボイスチャンネルに参加させてから呼び出してください。',
               ephemeral: true,
             });
             return;
@@ -365,7 +371,7 @@ class RecordAddon extends Addon {
 
           if (!channel) {
             await interaction.reply({
-              content: 'ボイスチャンネルに参加してから呼び出してください。',
+              content: 'ボイスチャンネルに参加させてから呼び出してください。',
               ephemeral: true,
             });
             return;
@@ -427,8 +433,13 @@ class RecordAddon extends Addon {
         if (autoSummary && process.env.DEFAULT_CHANNEL_ID) {
           console.info(`[RecordAddon] 30秒後に要約します。`);
           await setTimeout(30000);
+
           const summary = await this.#summarize(previousChannel, start, end);
-          await client.channels.cache.get(process.env.DEFAULT_CHANNEL_ID).send(summary);
+          if (summary) {
+            await client.channels.cache.get(process.env.DEFAULT_CHANNEL_ID).send(summary);
+          } else {
+            console.info(`[RecordAddon] 該当期間の記録データがありません。`);
+          }
         }
       }
     });
@@ -557,9 +568,15 @@ class RecordAddon extends Addon {
       return null;
     }
 
+    // 時間帯に応じてモデルを切り替える
+    let model = 'summarize';
+    if (start.hour() >= 17) {
+      model = 'summarize-casual';
+    }
+
     const { data } = await axios.post(`${process.env.OPEN_WEBUI_HOST}/api/chat/completions`,
       {
-        model: 'summarize',
+        model: model,
         messages: [
           {
             role: 'user',
@@ -575,7 +592,7 @@ class RecordAddon extends Addon {
       }
     );
 
-    console.log(`[RecordAddon] OpenAIトークン消費:`, data.usage);
+    console.log(`[RecordAddon] OpenAIトークン消費<${model}>:`, data.usage);
 
     const now = dayjs().tz().format('YYYY/MM/DD');
     const header = `${now} ${start.format('HH:mm')}-${end.format('HH:mm')} <${channel.name}> にて:`;
