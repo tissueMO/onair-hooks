@@ -177,6 +177,7 @@ class ShuffleAddon extends Addon {
     const members = channels
       .map(c => [...c.members.values()])
       .flat()
+      .filter(m => !m.user.bot)
       .sort(() => Math.random() - 0.5);
 
     const groups = chunkArray(members, Math.ceil(members.length / channels.length));
