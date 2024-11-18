@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, GatewayDispatchEvents } = require('discord.js');
 const HookAddon = require('./addon/HookAddon');
 const FollowAddon = require('./addon/FollowAddon');
 const ShuffleAddon = require('./addon/ShuffleAddon');
@@ -11,7 +11,13 @@ const clients = [];
 for (const token of tokens) {
   const index = tokens.indexOf(token);
 
-  const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildVoiceStates,
+      GatewayIntentBits.GuildScheduledEvents,
+    ],
+  });
 
   // 初回のみ実行
   client.once('ready', async () => {

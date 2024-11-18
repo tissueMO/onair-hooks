@@ -2,7 +2,7 @@ const Addon = require('./Addon');
 const fs = require('fs').promises;
 const path = require('path');
 const { chunkArray } = require('../common');
-const { Guild, CommandInteraction, Client, ChannelType, ApplicationCommandOptionType } = require('discord.js');
+const { Guild, Client, ChannelType, ApplicationCommandOptionType } = require('discord.js');
 
 const SHUFFLE_FILE = path.join(process.env.STORE_PATH, 'shuffle.json');
 
@@ -15,58 +15,6 @@ class ShuffleAddon extends Addon {
    * @type Object<string, VoiceChannel[]>
    */
   static #channels = {};
-
-  /**
-   * 登録するコマンド一覧
-   */
-  static get COMMANDS() {
-    return [
-      {
-        name: 'shuffle',
-        description: 'ボイスチャンネルに参加しているメンバーを対象にシャッフルします。',
-      },
-      {
-        name: 'shuffle-list',
-        description: 'シャッフル対象のボイスチャンネルを列挙します。',
-      },
-      {
-        name: 'shuffle-set',
-        description: 'シャッフル対象のボイスチャンネルを設定します。',
-        options: [
-          {
-            name: 'channel1',
-            description: 'ボイスチャンネル1',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-          },
-          {
-            name: 'channel2',
-            description: 'ボイスチャンネル2',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-          },
-          {
-            name: 'channel3',
-            description: 'ボイスチャンネル3',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-          },
-          {
-            name: 'channel4',
-            description: 'ボイスチャンネル4',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-          },
-          {
-            name: 'channel5',
-            description: 'ボイスチャンネル5',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-          },
-        ],
-      },
-    ];
-  }
 
   /**
    * @override
@@ -85,55 +33,70 @@ class ShuffleAddon extends Addon {
 
     await ShuffleAddon.#loadConfig(client);
 
-    // スラッシュコマンドを追加
-    if (this.settings[guild.id].length > 0) {
-      await Promise.all(ShuffleAddon.COMMANDS.map(command => client.application.commands.create(command, guild.id)));
-      console.info(`[ShuffleAddon] <${guild.name}> コマンドを登録しました。`);
-    } else {
+    if (!this.settings[guild.id].length) {
       console.info(`[ShuffleAddon] <${guild.name}> このサーバーでは無効です。`);
+      return;
     }
 
-    // コマンドハンドリング
-    client.on('interactionCreate', async (/** @type {CommandInteraction} */ interaction) => {
-      if (interaction.guildId !== guild.id || !interaction.isCommand()) {
-        return;
+    await this.addCommand(client, guild,
+      {
+        name: 'shuffle',
+        description: 'ボイスチャンネルに参加しているメンバーを対象にシャッフルします。',
+      },
+      async (client, guild, interaction) => {
+        console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル一覧`);
+
+        return {
+          content: `シャッフル対象のチャンネル: ${ShuffleAddon.#channels[guild.id]?.join(', ') ?? '(なし)'}`,
+          ephemeral: true,
+        };
       }
+    );
 
-      // コマンド別
-      switch (interaction.commandName) {
-        case 'shuffle-list':
-          console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル一覧`);
-          await interaction.reply({
-            content: `シャッフル対象のチャンネル: ${ShuffleAddon.#channels[guild.id]?.join(', ') ?? '(なし)'}`,
-            ephemeral: true,
-          });
-          break;
+    await this.addCommand(client, guild,
+      {
+        name: 'shuffle-set',
+        description: 'シャッフル対象のボイスチャンネルを設定します。',
+        options: [1, 2, 3, 4, 5]
+          .map(n => ({
+            name: `channel${n}`,
+            description: `ボイスチャンネル${n}`,
+            type: ApplicationCommandOptionType.Channel,
+            channelTypes: [ChannelType.GuildVoice],
+          })),
+      },
+      async (client, guild, interaction) => {
+        console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル設定`);
 
-        case 'shuffle-set':
-          console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル設定`);
-          await interaction.reply({
-            content: 'OK',
-            ephemeral: true,
-          });
+        ShuffleAddon.#channels[guild.id] = [1, 2, 3, 4, 5]
+          .map(n => interaction.options.getChannel(`channel${n}`))
+          .filter(c => c !== null);
 
-          ShuffleAddon.#channels[guild.id] = [
-            interaction.options.getChannel('channel1'),
-            interaction.options.getChannel('channel2'),
-            interaction.options.getChannel('channel3'),
-            interaction.options.getChannel('channel4'),
-            interaction.options.getChannel('channel5'),
-          ].filter(c => c !== null);
+        ShuffleAddon.#saveConfig();
 
-          ShuffleAddon.#saveConfig();
-          break;
-
-        case 'shuffle':
-          console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル`);
-          await interaction.reply({ content: 'OK' });
-          await this.#shuffle(guild);
-          break;
+        return {
+          content: 'OK',
+          ephemeral: true,
+        };
       }
-    });
+    );
+
+    await this.addCommand(client, guild,
+      {
+        name: 'shuffle',
+        description: 'ボイスチャンネルに参加しているメンバーを対象にシャッフルします。',
+      },
+      async (client, guild, interaction) => {
+        console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル`);
+
+        await interaction.reply({ content: 'OK' });
+        await this.#shuffle(guild);
+
+        return null;
+      }
+    );
+
+    console.info(`[ShuffleAddon] <${guild.name}> コマンドを登録しました。`);
   }
 
   /**

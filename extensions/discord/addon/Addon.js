@@ -1,4 +1,4 @@
-const { Client, Guild } = require('discord.js');
+const { Client, Guild, ApplicationCommandDataResolvable, CommandInteraction, InteractionReplyOptions } = require('discord.js');
 const config = require('../config');
 
 /**
@@ -7,6 +7,7 @@ const config = require('../config');
 class Addon {
   #settings;
   #guilds;
+  #commands;
 
   /**
    * コンフィグキーを返します。
@@ -50,6 +51,19 @@ class Addon {
         return settings;
       }, {});
 
+      // コマンドハンドリング
+      this.#commands = {};
+      client.on('interactionCreate', async (/** @type {CommandInteraction} */ interaction) => {
+        if (interaction.isCommand()) {
+          const guild = client.guilds.cache.get(interaction.guildId);
+          const reaction = await this.#commands[interaction.commandName]?.(client, guild, interaction);
+          if (reaction) {
+            await interaction.reply(reaction);
+          }
+        }
+      });
+
+      // 初期化
       await Promise.all(guildIds.map(guildId => this.initialize(client, this.#guilds[guildId])));
     });
   }
@@ -60,6 +74,19 @@ class Addon {
    * @param {Guild} guild
    */
   async initialize(client, guild) {
+  }
+
+  /**
+   * コマンドを登録します。
+   * @param {Client} client
+   * @param {Guild} guild
+   * @param {ApplicationCommandDataResolvable} command
+   * @param {function(Client, Guild, CommandInteraction): Promise<InteractionReplyOptions?>} callback
+   * @return {Promise<void>}
+   */
+  async addCommand(client, guild, command, callback) {
+    this.#commands[command.name] = callback;
+    await client.application.commands.create(command, guild.id);
   }
 }
 

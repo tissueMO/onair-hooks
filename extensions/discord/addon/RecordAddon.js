@@ -1,5 +1,5 @@
-const { Client, Guild, CommandInteraction, VoiceChannel, ChannelType, ApplicationCommandOptionType } = require('discord.js');
-const { joinVoiceChannel, EndBehaviorType, VoiceConnection, createAudioPlayer, createAudioResource, StreamType } = require('@discordjs/voice');
+const { Client, Guild, VoiceChannel, ChannelType, ApplicationCommandOptionType, GuildScheduledEventStatus, BaseInteraction } = require('discord.js');
+const { joinVoiceChannel, EndBehaviorType, VoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
 const Addon = require('./Addon');
 const { createWriteStream, createReadStream } = require('fs');
 const { pipeline } = require('stream/promises');
@@ -16,6 +16,7 @@ const utc = require('dayjs/plugin/utc');
 const { default: axios } = require('axios');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { setTimeout } = require('timers/promises');
+const { CronJob } = require('cron');
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -50,105 +51,6 @@ class RecordAddon extends Addon {
   #contexts;
 
   /**
-   * 登録するコマンド一覧
-   */
-  static get COMMANDS() {
-    return [
-      {
-        name: 'record-start',
-        description: 'ボイスチャンネルに議事録要約Botを参加させます。',
-        options: [
-          {
-            name: 'silent',
-            description: 'Botが退出しても要約を自動生成しません。',
-            type: ApplicationCommandOptionType.Boolean,
-          },
-          {
-            name: 'channel',
-            description: '参加チャンネル',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-          },
-        ],
-      },
-      {
-        name: 'record-end',
-        description: 'ボイスチャンネルから議事録要約Botを退出させます。',
-      },
-      {
-        name: 'record-view',
-        description: '指定したチャンネルの時間範囲における文字起こしを取得します。',
-        options: [
-          {
-            name: 'channel',
-            description: '対象チャンネル',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-            required: true,
-          },
-          {
-            name: 'start',
-            description: '時刻始点(HH:mm)',
-            type: ApplicationCommandOptionType.String,
-            minLength: 5,
-            maxLength: 5,
-            required: true,
-          },
-          {
-            name: 'end',
-            description: '時刻終端(HH:mm)',
-            type: ApplicationCommandOptionType.String,
-            minLength: 5,
-            maxLength: 5,
-            required: true,
-          },
-        ],
-      },
-      {
-        name: 'record-summary',
-        description: '指定したチャンネルの時間範囲における要約を取得します。',
-        options: [
-          {
-            name: 'channel',
-            description: '対象チャンネル',
-            type: ApplicationCommandOptionType.Channel,
-            channelTypes: [ChannelType.GuildVoice],
-            required: true,
-          },
-          {
-            name: 'start',
-            description: '時刻始点(HH:mm)',
-            type: ApplicationCommandOptionType.String,
-            minLength: 5,
-            maxLength: 5,
-            required: true,
-          },
-          {
-            name: 'end',
-            description: '時刻終端(HH:mm)',
-            type: ApplicationCommandOptionType.String,
-            minLength: 5,
-            maxLength: 5,
-            required: true,
-          },
-        ],
-      },
-      {
-        name: 'speak',
-        description: '参加中のボイスチャンネル上で任意の文章を発話させます。',
-        options: [
-          {
-            name: 'text',
-            description: '発話内容',
-            type: ApplicationCommandOptionType.String,
-            required: true,
-          }
-        ],
-      },
-    ];
-  }
-
-  /**
    * @override
    */
   get configKey() {
@@ -173,139 +75,86 @@ class RecordAddon extends Addon {
     if (client.user.id === process.env.PRIMARY_BOT_ID) {
       RecordAddon.#connections = {};
 
-      // スラッシュコマンドを追加
-      if (this.settings[guild.id].length > 0) {
-        await Promise.all(RecordAddon.COMMANDS.map((command) => client.application.commands.create(command, guild.id)));
-        console.info(`[RecordAddon] <${guild.name}> コマンドを登録しました。`);
-      } else {
+      // スラッシュコマンドを追加 ※一部先発クライアントが後発クライアントを操作するケースあり
+      if (!this.settings[guild.id].length) {
         console.info(`[RecordAddon] <${guild.name}> このサーバーでは無効です。`);
         return;
       }
 
-      // コマンドハンドリング ※一部先発クライアントが後発クライアントを操作するケースあり
-      client.on('interactionCreate', async (/** @type {CommandInteraction} */ interaction) => {
-        if (interaction.guildId !== guild.id || !interaction.isCommand()) {
-          return;
-        }
-
-        // 古いデータをクリア
-        await this.#clean(guild.id);
-
-        /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
-        const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
-
-        // 文字起こし開始コマンド
-        if (interaction.commandName === 'record-start') {
+      await this.addCommand(client, guild,
+        {
+          name: 'record-start',
+          description: 'ボイスチャンネルに議事録要約Botを参加させます。',
+          options: [
+            {
+              name: 'silent',
+              description: 'Botが退出しても要約を自動生成しません。',
+              type: ApplicationCommandOptionType.Boolean,
+            },
+            {
+              name: 'channel',
+              description: '参加チャンネル',
+              type: ApplicationCommandOptionType.Channel,
+              channelTypes: [ChannelType.GuildVoice],
+            },
+          ],
+        },
+        async (client, guild, interaction) => {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 記録開始`);
 
-          if (!channel) {
-            await interaction.reply({
-              content: 'ボイスチャンネルに参加してから呼び出すか、チャンネルを指定してください。',
-              ephemeral: true,
-            });
-            return;
-          }
+          /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
+          const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
 
-          const joined = channel.members.filter(member => member.user.bot).size > 0;
-          if (joined) {
-            await interaction.reply({
-              content: 'Botは既に参加しています。',
-              ephemeral: true,
-            });
-            return;
-          }
-
-          // アイドルクライアント取得
-          const targetClient = RecordAddon.#poolClient();
-          const botId = targetClient?.user?.id;
-
-          if (!targetClient) {
-            await interaction.reply({
-              content: 'ボイスチャンネルに参加できるBotがいません。',
-              ephemeral: true,
-            });
-            return;
-          }
-
-          RecordAddon.#connections[botId]?.connection?.destroy();
-
-          // Botをボイスチャンネルに参加させる
-          const connection = joinVoiceChannel({
-            guildId: interaction.guildId,
-            channelId: channel.id,
-            group: channel.name,
-            adapterCreator: targetClient.guilds.cache.get(interaction.guildId).voiceAdapterCreator,
-            selfMute: false,
-            selfDeaf: false,
-          });
-
-          // ユーザーの発話ごとに音声を記録する
-          connection.receiver.speaking.on('start', async (userId) => {
-            if (!this.#contexts[userId]) {
-              await Promise.resolve()
-                .then(() => this.#capture(connection, {
-                  contextId: uuid(),
-                  guildId: guild.id,
-                  channelId: channel.id,
-                  userId,
-                  userName: guild.members.cache.get(userId).displayName,
-                  start: dayjs().tz().format(),
-                }))
-                .then(context => {
-                  if (context) {
-                    this.#enqueueConvertWorker(context);
-                  }
-                });
-            }
-          });
-
-          RecordAddon.#connections[botId] = {
-            connection: connection,
-            start: dayjs().tz().format(),
-            autoSummary: !interaction.options.getBoolean('silent'),
-          };
-
-          await interaction.reply({
-            content: `${channel} に参加しました。`,
-            ephemeral: true,
-          });
-
-          console.info(`[RecordAddon] Botが <${channel.name}> に参加しました。`);
+          return await this.#startRecord(guild.id, channel, interaction.options.getBoolean('silent'));
         }
+      );
 
-        // 記録終了コマンド
-        if (interaction.commandName === 'record-end') {
+      await this.addCommand(client, guild,
+        {
+          name: 'record-end',
+          description: 'ボイスチャンネルから議事録要約Botを退出させます。',
+        },
+        async (client, guild, interaction) => {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 記録終了`);
 
-          if (!channel) {
-            await interaction.reply({
-              content: 'ボイスチャンネルに参加させてから呼び出してください。',
-              ephemeral: true,
-            });
-            return;
-          }
+          /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
+          const channel = interaction.member.voice?.channel;
 
-          // Bot取得
-          const botId = channel.members.filter(member => member.user.bot).at(0)?.user?.id;
-          if (!botId) {
-            await interaction.reply({
-              content: '対象となるBotがいません。',
-              ephemeral: true,
-            });
-            return;
-          }
-
-          await interaction.reply({
-            content: 'OK',
-            ephemeral: true,
-          });
-
-          // Bot切断
-          RecordAddon.#connections[botId]?.connection?.disconnect();
+          return await this.#endRecord(guild.id, channel);
         }
+      );
 
-        // 指定範囲の文字起こし取得コマンド
-        if (interaction.commandName === 'record-view') {
+      await this.addCommand(client, guild,
+        {
+          name: 'record-view',
+          description: '指定したチャンネルの時間範囲における文字起こしを取得します。',
+          options: [
+            {
+              name: 'channel',
+              description: '対象チャンネル',
+              type: ApplicationCommandOptionType.Channel,
+              channelTypes: [ChannelType.GuildVoice],
+              required: true,
+            },
+            {
+              name: 'start',
+              description: '時刻始点(HH:mm)',
+              type: ApplicationCommandOptionType.String,
+              minLength: 5,
+              maxLength: 5,
+              required: true,
+            },
+            {
+              name: 'end',
+              description: '時刻終端(HH:mm)',
+              type: ApplicationCommandOptionType.String,
+              minLength: 5,
+              maxLength: 5,
+              required: true,
+            },
+          ],
+        },
+        async (client, guild, interaction) => {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 文字起こし`);
 
           const start = parseTime(interaction.options.getString('start'));
@@ -313,11 +162,10 @@ class RecordAddon extends Addon {
           const targetChannel = interaction.options.getChannel('channel');
 
           if (!start || !end) {
-            await interaction.reply({
+            return {
               content: '時刻は HH:mm 形式で入力してください。',
               ephemeral: true,
-            });
-            return;
+            };
           }
 
           await interaction.deferReply({ ephemeral: true });
@@ -335,10 +183,42 @@ class RecordAddon extends Addon {
           } else {
             await interaction.editReply('該当期間の記録データがありません。');
           }
-        }
 
-        // 指定範囲の要約コマンド
-        if (interaction.commandName === 'record-summary') {
+          return null;
+        }
+      );
+
+      await this.addCommand(client, guild,
+        {
+          name: 'record-summary',
+          description: '指定したチャンネルの時間範囲における要約を取得します。',
+          options: [
+            {
+              name: 'channel',
+              description: '対象チャンネル',
+              type: ApplicationCommandOptionType.Channel,
+              channelTypes: [ChannelType.GuildVoice],
+              required: true,
+            },
+            {
+              name: 'start',
+              description: '時刻始点(HH:mm)',
+              type: ApplicationCommandOptionType.String,
+              minLength: 5,
+              maxLength: 5,
+              required: true,
+            },
+            {
+              name: 'end',
+              description: '時刻終端(HH:mm)',
+              type: ApplicationCommandOptionType.String,
+              minLength: 5,
+              maxLength: 5,
+              required: true,
+            },
+          ],
+        },
+        async (client, guild, interaction) => {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 要約`);
 
           const start = parseTime(interaction.options.getString('start'));
@@ -346,11 +226,10 @@ class RecordAddon extends Addon {
           const targetChannel = interaction.options.getChannel('channel');
 
           if (!start || !end) {
-            await interaction.reply({
+            return {
               content: '時刻は HH:mm 形式で入力してください。',
               ephemeral: true,
-            });
-            return;
+            };
           }
 
           await interaction.deferReply({ ephemeral: true });
@@ -364,27 +243,40 @@ class RecordAddon extends Addon {
             await interaction.editReply('該当期間の記録データがありません。');
           }
         }
+      );
 
-        // 発話コマンド
-        if (interaction.commandName === 'speak') {
+      await this.addCommand(client, guild,
+        {
+          name: 'speak',
+          description: '参加中のボイスチャンネル上で任意の文章を発話させます。',
+          options: [
+            {
+              name: 'text',
+              description: '発話内容',
+              type: ApplicationCommandOptionType.String,
+              required: true,
+            }
+          ],
+        },
+        async (client, guild, interaction) => {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 発話`);
 
+          /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
+          const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
           if (!channel) {
-            await interaction.reply({
+            return {
               content: 'ボイスチャンネルに参加させてから呼び出してください。',
               ephemeral: true,
-            });
-            return;
+            };
           }
 
           // Bot取得
           const botId = channel.members.filter(member => member.user.bot).at(0)?.user?.id;
           if (!botId) {
-            await interaction.reply({
+            return {
               content: '対象となるBotがいません。',
               ephemeral: true,
-            });
-            return;
+            };
           }
 
           await interaction.reply({
@@ -394,8 +286,12 @@ class RecordAddon extends Addon {
 
           // 発話
           await this.#speak(RecordAddon.#connections[botId]?.connection, interaction.options.getString('text'))
+
+          return null;
         }
-      });
+      );
+
+      console.info(`[RecordAddon] <${guild.name}> コマンドを登録しました。`);
     }
 
     // ボイスチャンネルの退出を監視
@@ -429,7 +325,7 @@ class RecordAddon extends Addon {
         const previousChannel = await oldState.guild.channels.fetch(oldState.channelId);
         console.info(`[RecordAddon] Botが <${previousChannel.name}> から退出しました。`);
 
-        // デフォルトチャンネルに対して一定時間後に要約呼び出し
+        // 一定時間後にデフォルトチャンネル宛に要約を貼る
         if (autoSummary && process.env.DEFAULT_CHANNEL_ID) {
           console.info(`[RecordAddon] 30秒後に要約します。`);
           await setTimeout(30000);
@@ -443,6 +339,153 @@ class RecordAddon extends Addon {
         }
       }
     });
+
+    // スケジュール監視
+    CronJob.from({
+      cronTime: '0 * * * * *',
+      start: true,
+      timeZone: 'Asia/Tokyo',
+      onTick: async () => {
+        const event = (await guild.scheduledEvents.fetch())
+          .filter(event =>
+            (event.status === GuildScheduledEventStatus.Scheduled || event.status === GuildScheduledEventStatus.Active)
+              && dayjs(event.scheduledStartAt).format('YYYYMMDDHHmm') === dayjs().format('YYYYMMDDHHmm')
+              && event.description.includes('@record')
+          )
+          ?.first();
+
+        if (event) {
+          console.log('[RecordAddon] スケジュール実行:', event.channel);
+
+          await this.#startRecord(guild.id, event.channel, false);
+
+          // 一定時間待って誰も入退室がなければ退出
+          await setTimeout(30 * 60 * 1000);
+
+          const members = event.channel.members;
+          const onlyBot = members.filter(member => member.user.bot).size > 0 && members.filter(member => !member.user.bot).size === 0;
+          if (onlyBot) {
+            await this.#endRecord(guild.id, event.channel);
+          }
+        }
+      },
+    });
+  }
+
+  /**
+   * Botによる音声記録を開始します。
+   * @param {string} guildId
+   * @param {VoiceChannel} channel
+   * @param {boolean} silent 記録終了後に自動で要約を生成するかどうか
+   * @returns {Promise<Object>} 返信内容
+   */
+  async #startRecord(guildId, channel, silent = false) {
+    await this.#clean(guildId);
+
+    if (!channel) {
+      return {
+        content: 'ボイスチャンネルに参加してから呼び出すか、チャンネルを指定してください。',
+        ephemeral: true,
+      };
+    }
+
+    const joined = channel.members.filter(member => member.user.bot).size > 0;
+    if (joined) {
+      return {
+        content: 'Botは既に参加しています。',
+        ephemeral: true,
+      };
+    }
+
+    // アイドルクライアント取得
+    const targetClient = RecordAddon.#poolClient();
+    const botId = targetClient?.user?.id;
+
+    if (!targetClient) {
+      return {
+        content: 'ボイスチャンネルに参加できるBotがいません。',
+        ephemeral: true,
+      };
+    }
+
+    RecordAddon.#connections[botId]?.connection?.destroy();
+
+    // Botをボイスチャンネルに参加させる
+    const connection = joinVoiceChannel({
+      guildId: guildId,
+      channelId: channel.id,
+      group: channel.name,
+      adapterCreator: targetClient.guilds.cache.get(guildId).voiceAdapterCreator,
+      selfMute: false,
+      selfDeaf: false,
+    });
+
+    // ユーザーの発話ごとに音声を記録する
+    connection.receiver.speaking.on('start', async (userId) => {
+      if (!this.#contexts[userId]) {
+        await Promise.resolve()
+          .then(() => this.#capture(connection, {
+            contextId: uuid(),
+            guildId: guild.id,
+            channelId: channel.id,
+            userId,
+            userName: guild.members.cache.get(userId).displayName,
+            start: dayjs().tz().format(),
+          }))
+          .then(context => {
+            if (context) {
+              this.#enqueueConvertWorker(context);
+            }
+          });
+      }
+    });
+
+    RecordAddon.#connections[botId] = {
+      connection: connection,
+      start: dayjs().tz().format(),
+      autoSummary: !silent,
+    };
+
+    console.info(`[RecordAddon] Botが <${channel.name}> に参加しました。`);
+
+    return {
+      content: `${channel} に参加しました。`,
+      ephemeral: true,
+    };
+  }
+
+  /**
+   * Botによる音声記録を終了します。
+   * @param {string} guildId
+   * @param {VoiceChannel} channel
+   * @returns {Object} 返信内容
+   */
+  async #endRecord(guildId, channel) {
+    await this.#clean(guildId);
+
+    if (!channel) {
+      return {
+        content: 'ボイスチャンネルに参加させてから呼び出してください。',
+        ephemeral: true,
+      };
+    }
+
+    // Bot取得
+    const botId = channel.members.filter(member => member.user.bot).at(0)?.user?.id;
+    if (!botId) {
+      return {
+        content: '対象となるBotがいません。',
+        ephemeral: true,
+      };
+    }
+
+    // Bot切断
+    RecordAddon.#connections[botId]?.connection?.disconnect();
+
+    return {
+      content: 'OK',
+      ephemeral: true,
+    };
   }
 
   /**
