@@ -40,8 +40,8 @@ class ShuffleAddon extends Addon {
 
     await this.addCommand(client, guild,
       {
-        name: 'shuffle',
-        description: 'ボイスチャンネルに参加しているメンバーを対象にシャッフルします。',
+        name: 'shuffle-list',
+        description: 'シャッフル対象のボイスチャンネルを列挙します。',
       },
       async (client, guild, interaction) => {
         console.info(`[ShuffleAddon] <${guild.name}> コマンド: シャッフル一覧`);
