@@ -113,12 +113,20 @@ class RecordAddon extends Addon {
         {
           name: 'record-end',
           description: 'ボイスチャンネルから議事録要約Botを退出させます。',
+          options: [
+            {
+              name: 'channel',
+              description: '参加チャンネル',
+              type: ApplicationCommandOptionType.Channel,
+              channelTypes: [ChannelType.GuildVoice],
+            },
+          ],
         },
         async (client, guild, interaction) => {
           console.info(`[RecordAddon] <${guild.name}> コマンド: 記録終了`);
 
           /** @type {VoiceChannel} 呼び出したユーザーが参加しているボイスチャンネル */
-          const channel = interaction.member.voice?.channel;
+          const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
 
           return await this.#endRecord(guild, channel);
         }
@@ -291,6 +299,40 @@ class RecordAddon extends Addon {
         }
       );
 
+      // スケジュール監視
+      CronJob.from({
+        cronTime: '0 * * * * *',
+        start: true,
+        timeZone: 'Asia/Tokyo',
+        onTick: async () => {
+          const events = (await guild.scheduledEvents.fetch())
+            .filter(event =>
+              (event.status === GuildScheduledEventStatus.Scheduled || event.status === GuildScheduledEventStatus.Active)
+                && dayjs(event.scheduledStartAt).format('YYYYMMDDHHmm') === dayjs().format('YYYYMMDDHHmm')
+                && event.description.includes('@record')
+            )
+            .values();
+
+          // 記録開始
+          for (const event of [...events]) {
+            console.log(`[RecordAddon] スケジュール参加: ${event.channel.name}`);
+            await this.#startRecord(guild, event.channel, false);
+            await setTimeout(3000);
+          }
+
+          // 一定時間経っても誰もいなければ中止する
+          await setTimeout(30 * 60 * 1000);
+
+          for (const event of [...events]) {
+            const members = event.channel.members;
+            const onlyBot = members.filter(member => member.user.bot).size > 0 && members.filter(member => !member.user.bot).size === 0;
+            if (onlyBot) {
+              await this.#endRecord(guild, event.channel);
+            }
+          }
+        },
+      });
+
       console.info(`[RecordAddon] <${guild.name}> コマンドを登録しました。`);
     }
 
@@ -342,40 +384,6 @@ class RecordAddon extends Addon {
         }
       }
     });
-
-    // スケジュール監視
-    CronJob.from({
-      cronTime: '0 * * * * *',
-      start: true,
-      timeZone: 'Asia/Tokyo',
-      onTick: async () => {
-        const events = (await guild.scheduledEvents.fetch())
-          .filter(event =>
-            (event.status === GuildScheduledEventStatus.Scheduled || event.status === GuildScheduledEventStatus.Active)
-              && dayjs(event.scheduledStartAt).format('YYYYMMDDHHmm') === dayjs().format('YYYYMMDDHHmm')
-              && event.description.includes('@record')
-          );
-
-        await Promise.all(events.map(async (event, i) => {
-          console.log(`[RecordAddon] スケジュール参加: ${event.channel.name}`);
-
-          // 開始タイミングが同時にならないようにする
-          await setTimeout(1000 * (i + 1));
-
-          // 記録開始
-          await this.#startRecord(guild, event.channel, false);
-
-          // 一定時間待って誰も入退室がなければ退出する
-          await setTimeout(30 * 60 * 1000);
-
-          const members = event.channel.members;
-          const onlyBot = members.filter(member => member.user.bot).size > 0 && members.filter(member => !member.user.bot).size === 0;
-          if (onlyBot) {
-            await this.#endRecord(guild, event.channel);
-          }
-        }));
-      },
-    });
   }
 
   /**
@@ -389,6 +397,7 @@ class RecordAddon extends Addon {
     await this.#clean(guild.id);
 
     if (!channel) {
+      console.warn(`[RecordAddon] Bot参加失敗: チャンネル指定なし`);
       return {
         content: 'ボイスチャンネルに参加してから呼び出すか、チャンネルを指定してください。',
         ephemeral: true,
@@ -397,6 +406,7 @@ class RecordAddon extends Addon {
 
     const joined = channel.members.filter(member => member.user.bot).size > 0;
     if (joined) {
+      console.warn(`[RecordAddon] Bot参加失敗: Bot参加済み`);
       return {
         content: 'Botは既に参加しています。',
         ephemeral: true,
@@ -408,6 +418,7 @@ class RecordAddon extends Addon {
     const botId = targetClient?.user?.id;
 
     if (!targetClient) {
+      console.warn(`[RecordAddon] Bot参加失敗: Botプール不足`);
       return {
         content: 'ボイスチャンネルに参加できるBotがいません。',
         ephemeral: true,
@@ -473,8 +484,9 @@ class RecordAddon extends Addon {
     await this.#clean(guild.id);
 
     if (!channel) {
+      console.warn(`[RecordAddon] Bot退出失敗: チャンネル指定なし`);
       return {
-        content: 'ボイスチャンネルに参加させてから呼び出してください。',
+        content: 'ボイスチャンネルに参加してから呼び出すか、チャンネルを指定してください。',
         ephemeral: true,
       };
     }
@@ -482,6 +494,7 @@ class RecordAddon extends Addon {
     // Bot取得
     const botId = channel.members.filter(member => member.user.bot).at(0)?.user?.id;
     if (!botId) {
+      console.warn(`[RecordAddon] Bot退出失敗: 参加Botなし`);
       return {
         content: '対象となるBotがいません。',
         ephemeral: true,
