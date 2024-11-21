@@ -360,7 +360,7 @@ class RecordAddon extends Addon {
           console.log(`[RecordAddon] スケジュール参加: ${event.channel.name}`);
 
           // 開始タイミングが同時にならないようにする
-          await setTimeout(1000 * i);
+          await setTimeout(1000 * (i + 1));
 
           // 記録開始
           await this.#startRecord(guild, event.channel, false);
