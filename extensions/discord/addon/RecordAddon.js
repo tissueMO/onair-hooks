@@ -167,6 +167,8 @@ class RecordAddon extends Addon {
 
           const start = parseTime(interaction.options.getString('start'));
           const end = parseTime(interaction.options.getString('end'));
+
+          /** @type VoiceChannel */
           const targetChannel = interaction.options.getChannel('channel');
 
           if (!start || !end) {
@@ -180,12 +182,14 @@ class RecordAddon extends Addon {
 
           const transcription = await this.#fetchTranscription(targetChannel, start, end);
 
+          // 添付ファイルとして送信
           if (transcription) {
-            // 添付ファイルとして送信
-            const file = `/tmp/${uuid()}.log`;
-            await fs.writeFile(file, transcription, { encoding: 'utf8' });
-            await interaction.channel.send({ files: [file] });
-            await fs.unlink(file);
+            const now = dayjs().tz();
+            const fileName = `/tmp/${now.format('YYYYMMDD')}_${start.format('HHmm')}-${end.format('HHmm')}_${targetChannel.name}.log`;
+
+            await fs.writeFile(fileName, transcription, { encoding: 'utf8' });
+            await interaction.channel.send({ files: [fileName] });
+            await fs.unlink(fileName);
 
             await interaction.editReply('OK');
           } else {
@@ -305,17 +309,19 @@ class RecordAddon extends Addon {
         start: true,
         timeZone: 'Asia/Tokyo',
         onTick: async () => {
-          const events = (await guild.scheduledEvents.fetch())
-            .filter(event =>
-              (event.status === GuildScheduledEventStatus.Scheduled || event.status === GuildScheduledEventStatus.Active)
-                && dayjs(event.scheduledStartAt).format('YYYYMMDDHHmm') === dayjs().format('YYYYMMDDHHmm')
-                && event.description.includes('@record')
-            )
-            .values();
+          const events = [...(
+            (await guild.scheduledEvents.fetch())
+              .filter(event =>
+                (event.status === GuildScheduledEventStatus.Scheduled || event.status === GuildScheduledEventStatus.Active)
+                  && dayjs(event.scheduledStartAt).format('YYYYMMDDHHmm') === dayjs().format('YYYYMMDDHHmm')
+                  && event.description.includes('@record')
+              )
+              .values()
+          )];
 
           // 記録開始
-          for (const event of [...events]) {
-            console.log(`[RecordAddon] スケジュール参加: ${event.channel.name}`);
+          for (const event of events) {
+            console.info(`[RecordAddon] スケジュール参加: ${event.channel.name}`);
             await this.#startRecord(guild, event.channel, false);
             await setTimeout(3000);
           }
@@ -323,11 +329,14 @@ class RecordAddon extends Addon {
           // 一定時間経っても誰もいなければ中止する
           await setTimeout(30 * 60 * 1000);
 
-          for (const event of [...events]) {
+          for (const event of events) {
             const members = event.channel.members;
             const onlyBot = members.filter(member => member.user.bot).size > 0 && members.filter(member => !member.user.bot).size === 0;
             if (onlyBot) {
+              console.info(`[RecordAddon] スケジュール参加しましたが、参加者がいないため中止します: ${event.channel.name}`);
               await this.#endRecord(guild, event.channel);
+          } else {
+              console.info(`[RecordAddon] スケジュール参加継続: ${event.channel.name}`);
             }
           }
         },
@@ -339,11 +348,11 @@ class RecordAddon extends Addon {
     // ボイスチャンネルの退出を監視
     client.on('voiceStateUpdate', async (oldState, newState) => {
       const botId = client.user.id;
-      const channel = oldState.guild.channels.cache.find(channel => channel.type === ChannelType.GuildVoice && channel.members.has(botId));
+      const botChannel = oldState.guild.channels.cache.find(channel => channel.type === ChannelType.GuildVoice && channel.members.has(botId));
 
       // 誰もいなくなったら退出する
-      if (channel && oldState.channelId === channel.id && newState.channelId === null) {
-        const members = channel.members.filter(member => !member.user.bot);
+      if (botChannel && oldState.channelId === botChannel.id && oldState.channelId !== newState.channelId) {
+        const members = botChannel.members.filter(member => !member.user.bot);
 
         if (members.size === 0) {
           RecordAddon.#connections[botId]?.connection?.disconnect();
@@ -673,7 +682,7 @@ class RecordAddon extends Addon {
         }, {})
       )
       .then(names => Object.entries(names)
-        .sort(([_, aCount], [_, bCount]) => bCount - aCount)
+        .sort(([, aCount], [, bCount]) => bCount - aCount)
         .map(entries => entries[0])
       );
 
