@@ -660,12 +660,22 @@ class RecordAddon extends Addon {
 
     console.log(`[RecordAddon] OpenAIトークン消費 <${model}>:`, data.usage);
 
-    // 参加者リストを作る
+    // 参加者リストを作る (参加率順)
     const contextIds = await this.#redisClient.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, start.valueOf(), end.valueOf());
     const userNames = await this.#redisClient.mGet(contextIds.map(id => `${process.env.REDIS_NAMESPACE}:context:${id}`))
       .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
       .then(contexts => contexts.filter(context => context?.channelId === channel.id))
-      .then(contexts => Array.from(new Set(contexts.map(context => context.userShortName))));
+      .then(contexts => contexts
+        .map(context => context.userShortName)
+        .reduce((names, name) => {
+          names[name] = names[name] ? (names[name] + 1) : 1;
+          return names;
+        }, {})
+      )
+      .then(names => Object.entries(names)
+        .sort(([_, aCount], [_, bCount]) => bCount - aCount)
+        .map(entries => entries[0])
+      );
 
     // フォーマット
     const now = dayjs().tz().format('YYYY/MM/DD');
