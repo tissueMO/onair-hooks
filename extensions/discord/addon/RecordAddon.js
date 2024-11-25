@@ -687,7 +687,7 @@ class RecordAddon extends Addon {
     // 文字起こし取得
     const transcription = await this.#fetchTranscription(channel, start, end);
     if (!transcription) {
-      return [headerText, '(要約できませんでした: 該当期間の記録がありません)'].join('\n');
+      return null;
     }
 
     // サマリー生成
