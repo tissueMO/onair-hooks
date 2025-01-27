@@ -1,9 +1,7 @@
 const { parseArgs } = require('util');
-const WorkerManager = require('./worker/WorkerManager');
-const ConvertWorker = require('./worker/ConvertWorker');
-const TranscribeWorker = require('./worker/TranscribeWorker');
+const { ConvertWorker, TranscribeWorker, WorkerManager } = require('./worker/index');
 
-// コマンドライン引数
+// コマンドライン引数定義
 const parsedArgs = parseArgs({
 	options: {
 		worker: {
@@ -17,21 +15,27 @@ const parsedArgs = parseArgs({
 	}
 })
 
+// ワーカー定義
+const WORKER_CLASSES = {
+	convert: ConvertWorker,
+	transcribe: TranscribeWorker,
+};
+
 // ワーカー登録
 const manager = new WorkerManager();
 
-if (parsedArgs.values.worker === 'convert') {
-	console.info('音声変換ワーカーを開始します...');
-	manager.register(new ConvertWorker());
-}
-if (parsedArgs.values.worker === 'transcribe') {
-	console.info('文字起こしワーカーを開始します...');
-	manager.register(new TranscribeWorker());
+const workerClass = WORKER_CLASSES[parsedArgs.values.worker];
+if (workerClass) {
+	console.info(`ワーカー [${parsedArgs.values.worker}] を開始します...`);
+	manager.register(new workerClass());
+} else {
+	console.error('無効なワーカーが指定されました。');
+	process.exit(1);
 }
 
 // ワーカー開始
-if (parsedArgs.values.once) {
-	manager.once().then(() => process.exit());
-} else {
+if (!parsedArgs.values.once) {
 	manager.start();
+} else {
+	manager.once().then(() => process.exit());
 }

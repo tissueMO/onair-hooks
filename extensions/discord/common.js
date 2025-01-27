@@ -42,6 +42,21 @@ exports.chunkArray = (array, size) => {
  * 接続済みのRedisクライアントを返します。
  * @returns {Promise<RedisClientType>}
  */
-exports.createRedisClient = async () => {
-  return await createClient({ url: process.env.REDIS_HOST }).connect();
+exports.createRedisClient = () => {
+  return createClient({ url: process.env.REDIS_HOST }).connect();
 };
+
+/**
+ * データを元にFormDataを生成します。
+ * @param {Object} data
+ * @returns {FormData}
+ */
+exports.createFormData = (data) => {
+  const formData = new FormData();
+
+  for (const [key, value] of Object.entries(data)) {
+    formData.append(key, value);
+  }
+
+  return formData;
+}

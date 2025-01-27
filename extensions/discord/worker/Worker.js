@@ -8,13 +8,13 @@ class Worker {
   /**
    * @type {RedisClientType}
    */
-  #redisClient;
+  #redis;
 
   /**
    * 初期化します。
    */
   async initialize() {
-    this.#redisClient = await createRedisClient();
+    this.#redis = await createRedisClient();
   }
 
   /**
@@ -29,8 +29,8 @@ class Worker {
    * Redis クライアント
    * @returns {RedisClientType}
    */
-  get redisClient() {
-    return this.#redisClient;
+  get redis() {
+    return this.#redis;
   }
 
   /**
@@ -50,7 +50,7 @@ class Worker {
       return;
     }
 
-    const multi = this.redisClient.multi();
+    const multi = this.redis.multi();
     for (const id of ids) {
       multi.lPush(`${process.env.REDIS_NAMESPACE}:${this.prefix}:queue`, id);
     }
@@ -62,7 +62,7 @@ class Worker {
    * @returns {Promise<string>}
    */
   async dequeue() {
-    return this.redisClient.rPop(`${process.env.REDIS_NAMESPACE}:${this.prefix}:queue`);
+    return this.redis.rPop(`${process.env.REDIS_NAMESPACE}:${this.prefix}:queue`);
   }
 
   /**

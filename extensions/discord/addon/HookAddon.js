@@ -1,6 +1,6 @@
-const { Client, Guild } = require('discord.js');
 const Addon = require('./Addon');
 const axios = require('axios').default;
+const { VoiceState } = require('discord.js');
 
 /**
  * ミーティングデバイスの利用状態変更を検知して任意のフック処理を行います。
@@ -15,36 +15,38 @@ class HookAddon extends Addon {
 
   /**
    * @override
-   * @param {Client} client
-   * @param {Guild} guild
    */
-  async initialize(client, guild) {
-    super.initialize(client, guild);
+  get events() {
+    return !this.isPrimary ? [] : [
+      {
+        event: 'voiceStateUpdate',
+        handler: async (/** @type {VoiceState} */ oldState, /** @type {VoiceState} */ newState) => {
+          const guild = newState.guild;
+          if (!this.handle(guild)) {
+            return;
+          }
 
-    // ミーティングデバイスの利用状態変更を監視
-    client.on('voiceStateUpdate', async (oldState, newState) => {
-      const guildName = newState.guild.name;
-      const userId = newState.id;
-      const user = (await newState.guild.members.fetch(newState.id)).user;
-      const username = user.username;
-      const state = this.#getChangedStateText(oldState, newState);
+          const guildName = guild.name;
+          const userId = newState.id;
+          const username = (await guild.members.fetch(newState.id)).user.username;
+          const state = this.#getChangedStateText(oldState, newState);
 
-      if (state) {
-        console.info(`[HookAddon] <${guildName}:${username}> ミーティングデバイス ${state}`);
+          if (state) {
+            console.info(`[${this.constructor.name}] <${guildName}:${username}> ミーティングデバイス ${state}`);
 
-        const results = await Promise.allSettled(
-          this.settings[guild.id]
-            .filter(h => h.userId === userId && h.state === state)
-            .map(({ hook: { url, method, headers, data } }) => axios.request({ url, method, headers, data }))
-        );
+            const requests = this.settings[guild.id]
+              .filter(h => h.userId === userId && h.state === state)
+              .map(({ hook: { url, method, headers, data } }) => axios.request({ url, method, headers, data }));
 
-        const successCount = results.filter(r => r.status === 'fulfilled').length;
-        const failureCount = results.filter(r => r.status === 'rejected').length;
-        console.info(`[HookAddon] <${guildName}:${username}> ${results.length}件のフック処理が実行されました。(成功=${successCount}, 失敗=${failureCount})`);
-      }
-    });
+            const results = await Promise.allSettled(requests);
 
-    console.info(`[HookAddon] <${guild.name}> フック設定: ${this.settings[guild.id].length}件`);
+            const successCount = results.filter(r => r.status === 'fulfilled').length;
+            const failureCount = results.filter(r => r.status === 'rejected').length;
+            console.info(`[${this.constructor.name}] <${guildName}:${username}> ${results.length}件のフック処理が実行されました。(成功=${successCount}, 失敗=${failureCount})`);
+          }
+        },
+      },
+    ]
   }
 
   /**
@@ -61,22 +63,12 @@ class HookAddon extends Addon {
 
     // ボイスチャンネルの入室
     if (isEntry) {
-      if (afterUsedDevices) {
-        return 'on';
-    } else {
-        return null;
-      }
+      return afterUsedDevices ? 'on' : null;
     }
-
     // ボイスチャンネルの退室
     if (isExit) {
-      if (afterUsedDevices) {
-        return 'off';
-      } else {
-        return null;
-      }
+      return afterUsedDevices ? 'off' : null;
     }
-
     // ミーティングデバイスの状態変更
     if (beforeUsedDevices !== afterUsedDevices) {
       return afterUsedDevices ? 'on' : 'off';

@@ -8,6 +8,12 @@ module.exports = {
     {
       guildId: '111111111111111111',
       expires: 43200,
+      defaultSummaryType: 'official',
+      autoSummarizeDelayTime: 30,
+      autoSummarizeMinDuration: 600,
+      autoSummarizeAbortDuration: 1800,
+      captureTimeout: 1,
+      captureMinDuration: 3,
     },
   ],
   hooks: [
