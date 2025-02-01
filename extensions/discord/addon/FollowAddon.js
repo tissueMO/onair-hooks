@@ -18,10 +18,10 @@ class FollowAddon extends Addon {
   get events() {
     return !this.isPrimary ? [] : [
       {
-        event: 'voiceStateUpdate',
+        name: 'voiceStateUpdate',
         handler: async (/** @type {VoiceState} */ oldState, /** @type {VoiceState} */ newState) => {
           const guild = newState.guild;
-          if (!this.handle(guild)) {
+          if (!this.isHandle(guild)) {
             return;
           }
 

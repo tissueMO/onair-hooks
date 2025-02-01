@@ -27,7 +27,7 @@ const clients = [process.env.DISCORD_TOKEN_1, process.env.DISCORD_TOKEN_2]
     addons.forEach(addon => (new addon()).register(client));
 
     client.once('ready', async () => {
-      client.guilds.cache.keys().forEach(guildId => {
+      [...client.guilds.cache.keys()].forEach((guildId, index) => {
         console.info(`Bot#${index}は <${client.user.tag}@${client.guilds.cache.get(guildId).name}> でログインしました。`);
       });
     });

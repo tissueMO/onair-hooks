@@ -1,5 +1,7 @@
-const { Guild } = require('discord.js');
+const { Guild, GuildScheduledEventStatus } = require('discord.js');
 const { CronJob } = require('cron');
+const dayjs = require('dayjs');
+const config = require('../config');
 
 /**
  * アドオン基底クラス

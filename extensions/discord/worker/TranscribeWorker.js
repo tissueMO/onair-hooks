@@ -27,20 +27,27 @@ class TranscribeWorker extends Worker {
     const srcFile = path.join(process.env.WORKER_PATH, `${id}.mp3`);
 
     // 文字起こし実行
-    const requestData = createFormData({
-      file: createReadStream(srcFile),
-      model: 'whisper-1',
-      language: 'ja',
-    });
-    const { data: responseData } = await axios.post(`${process.env.OPENAI_API_HOST}/v1/audio/transcriptions`, requestData, {
-      headers: {
-        ...requestData.getHeaders(),
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-    });
+    let transcription;
+    try {
+      const requestData = createFormData({
+        file: createReadStream(srcFile),
+        model: 'whisper-1',
+        language: 'ja',
+      });
 
-    // 後片付け
-    await fs.unlink(srcFile);
+      transcription = await axios.post(`${process.env.OPENAI_API_HOST}/v1/audio/transcriptions`, requestData, {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+      })
+        .then(({ data }) => data.text ?? '(文字起こし失敗)');
+
+    } catch (e) {
+      transcription = `(文字起こし失敗: ${e})`;
+
+    } finally {
+      await fs.unlink(srcFile);
+    }
 
     // コンテキストを更新
     const context = await this.redis.get(`${process.env.REDIS_NAMESPACE}:context:${id}`)
@@ -51,7 +58,7 @@ class TranscribeWorker extends Worker {
       return;
     }
 
-    context['transcription'] = responseData['text'] ?? '(文字起こし失敗)';
+    context['transcription'] = transcription;
 
     await this.redis.set(`${process.env.REDIS_NAMESPACE}:context:${id}`, JSON.stringify(context));
 

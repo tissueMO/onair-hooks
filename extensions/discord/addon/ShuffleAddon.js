@@ -65,7 +65,7 @@ class ShuffleAddon extends Addon {
       shuffle: async (guild, interaction) => {
         console.info(`[${this.constructor.name}] <${guild.name}> コマンド: シャッフル`);
 
-        await interaction.reply({ content: 'Shuffle OK' });
+        await interaction.reply({ content: 'シャッフルしました。' });
         await this.#shuffle(guild);
 
         return null;
@@ -92,7 +92,7 @@ class ShuffleAddon extends Addon {
         console.info(`[${this.constructor.name}] <${guild.name}> コマンド: シャッフル設定`);
 
         ShuffleAddon.#channels[guild.id] = [...Array(SHUFFLE_CHANNEL_COUNT)]
-          .map(n => interaction.options.getChannel(`channel${n + 1}`))
+          .map((_, i) => interaction.options.getChannel(`channel${i + 1}`))
           .filter(c => c !== null);
 
         ShuffleAddon.#saveConfig();

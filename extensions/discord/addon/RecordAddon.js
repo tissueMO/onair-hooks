@@ -20,16 +20,6 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.tz.setDefault('Asia/Tokyo');
 
-const DEFAULT_SUMMARY_TYPE = 'official';
-const DEFAULT_AUTO_SUMMARIZE_ABORT_DURATION = 30 * 60;
-const DEFAULT_AUTO_SUMMARIZE_MIN_DURATION = 600;
-const DEFAULT_AUTO_SUMMARIZE_DELAY_TIME = 30;
-const DEFAULT_CAPTURE_TIMEOUT = 1;
-const DEFAULT_CAPTURE_MIN_DURATION = 3;
-const SPEAK_SPEED = 0.9;
-const SPEAK_MODEL = 'tts-1';
-const SPEAK_VOICE = 'nova';
-
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
  */
@@ -185,7 +175,7 @@ class RecordAddon extends Addon {
         // パラメーター解析
         const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
         const silent = interaction.options.getBoolean('silent');
-        const type = interaction.options.getString('type') ?? (this.settings[guild.id]?.defaultSummaryType ?? DEFAULT_SUMMARY_TYPE);
+        const type = interaction.options.getString('type') ?? this.#getSetting(guild.id, 'defaultSummaryType');
 
         // 記録開始
         try {
@@ -251,7 +241,7 @@ class RecordAddon extends Addon {
         const channel = interaction.options.getChannel('channel');
         const start = parseTime(interaction.options.getString('start'));
         const end = parseTime(interaction.options.getString('end'));
-        const type = interaction.options.getString('type') ?? (this.settings[guild.id]?.defaultSummaryType ?? DEFAULT_SUMMARY_TYPE);
+        const type = interaction.options.getString('type') ?? this.#getSetting(guild.id, 'defaultSummaryType');
 
         if (!start || !end) {
           await interaction.editReply('時刻は HH:mm 形式で入力してください。');
@@ -299,7 +289,7 @@ class RecordAddon extends Addon {
 
         // 発話
         const connection = RecordAddon.#connections[botId]?.connection;
-        await this.#speak(connection, text);
+        await this.#speak(guild, connection, text);
 
         return null;
       },
@@ -332,7 +322,7 @@ class RecordAddon extends Addon {
 
             // 記録開始
             try {
-              const type = event.description.match(/@record\((.*)\)/)?.[1] ?? (this.settings[guild.id]?.defaultSummaryType ?? DEFAULT_SUMMARY_TYPE);
+              const type = event.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
 
               await this.#startRecord(guild, event.channel, { enabled: true, type: type });
 
@@ -344,7 +334,7 @@ class RecordAddon extends Addon {
           }
 
           // 一定時間経っても誰もいなければ中止する
-          await setTimeout((this.settings[guild.id]?.autoSummarizeAbortDuration ?? DEFAULT_AUTO_SUMMARIZE_ABORT_DURATION) * 1000);
+          await setTimeout(this.#getSetting(guild.id, 'autoSummarizeAbortDuration') * 1000);
 
           for (const event of events) {
             const members = event.channel.members;
@@ -369,12 +359,14 @@ class RecordAddon extends Addon {
     return [
       // 誰もいなくなったら退出し、要約を自動生成する
       {
-        event: 'voiceStateUpdate',
+        name: 'voiceStateUpdate',
         handler: async (/** @type {VoiceState} */ oldState, /** @type {VoiceState} */ newState) => {
           const guild = oldState.guild;
           if (!this.isHandle(guild)) {
             return;
           }
+
+          const lastChannel = guild.channels.cache.get(oldState.channelId);
 
           // 対象Botを特定
           const botId = this.client.user.id;
@@ -401,23 +393,23 @@ class RecordAddon extends Addon {
             const end = dayjs().tz();
             const timeSpan = end.diff(start, 'second');
             const autoSummary = connection.autoSummary;
-            const lastChannel = guild.channels.cache.get(oldState.channelId);
+            const defaultChannelId = this.#getSetting(guild.id, 'defaultChannelId');
 
             // ボイスチャンネルから切断
             connection.connection.destroy();
             delete RecordAddon.#connections[botId];
 
-            if (!autoSummary.enabled || !process.env.DEFAULT_CHANNEL_ID) {
+            if (!autoSummary.enabled || !defaultChannelId) {
               console.info(`[${this.constructor.name}] 自動要約を行いません。`);
               return;
             }
-            if (timeSpan < (this.settings[guild.id]?.autoSummarizeMinDuration ?? DEFAULT_AUTO_SUMMARIZE_MIN_DURATION)) {
+            if (timeSpan < this.#getSetting(guild.id, 'autoSummarizeMinDuration')) {
               console.info(`[${this.constructor.name}] 記録時間が短すぎるため自動要約をスキップします。`);
               return;
             }
 
             // 自動要約
-            const delay = this.settings[guild.id]?.autoSummarizeDelayTime ?? DEFAULT_AUTO_SUMMARIZE_DELAY_TIME;
+            const delay = this.#getSetting(guild.id, 'autoSummarizeDelayTime');
             console.info(`[${this.constructor.name}] ${delay}秒後に要約します。`);
             await setTimeout(delay * 1000);
 
@@ -428,7 +420,7 @@ class RecordAddon extends Addon {
             }
 
             // デフォルトチャンネルに送信
-            await this.client.channels.cache.get(process.env.DEFAULT_CHANNEL_ID).send(summary);
+            await this.client.channels.cache.get(defaultChannelId).send(summary);
           }
         },
       },
@@ -442,6 +434,7 @@ class RecordAddon extends Addon {
     super.register(client);
 
     // 全クライアント共通
+    RecordAddon.#connections = {};
     RecordAddon.#clients ??= [];
     if (!RecordAddon.#clients.includes(client)) {
       RecordAddon.#clients.push(client);
@@ -461,7 +454,7 @@ class RecordAddon extends Addon {
    * @param {Object} summaryOption
    * @returns {Promise<void>}
    */
-  async #startRecord(guild, channel, summaryOptions = {enabled: true, type: DEFAULT_SUMMARY_TYPE}) {
+  async #startRecord(guild, channel, summaryOptions = { enabled: true }) {
     await this.#clean(guild.id);
 
     if (!channel) {
@@ -567,7 +560,7 @@ class RecordAddon extends Addon {
         connection.receiver.subscribe(userId, {
           end: {
             behavior: EndBehaviorType.AfterSilence,
-            duration: (this.settings[guildId]?.captureTimeout ?? DEFAULT_CAPTURE_TIMEOUT) * 1000,
+            duration: this.#getSetting(guildId, 'captureTimeout') * 1000,
           },
         }),
         new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }),
@@ -579,8 +572,9 @@ class RecordAddon extends Addon {
 
       // ※相槌やノイズのような短い音声は除外する
       const timeSpan = dayjs(context.end).diff(dayjs(context.start), 'second');
-      if (timeSpan < (this.settings[guildId]?.captureMinDuration ?? DEFAULT_CAPTURE_MIN_DURATION)) {
+      if (timeSpan < this.#getSetting(guildId, 'captureMinDuration')) {
         console.info(`[${this.constructor.name}] キャプチャー中止: User<${userId}> Session<${contextId}>`);
+        await fs.unlink(pcmFile);
         return null;
       }
 
@@ -589,6 +583,7 @@ class RecordAddon extends Addon {
 
     } catch (err) {
       console.error(`[${this.constructor.name}] キャプチャー失敗: User<${userId}> Session<${contextId}>`, err);
+      await fs.unlink(pcmFile);
       return null;
 
     } finally {
@@ -607,7 +602,7 @@ class RecordAddon extends Addon {
       const workerPrefix = new ConvertWorker().prefix;
 
       await this.#redis.multi()
-        .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, this.settings[guildId]?.expires ?? 43200, JSON.stringify(context))
+        .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, this.#getSetting(guildId, 'expires'), JSON.stringify(context))
         .zAdd(`${process.env.REDIS_NAMESPACE}:contexts`, { score: dayjs(start).valueOf(), value: contextId })
         .lPush(`${process.env.REDIS_NAMESPACE}:${workerPrefix}:queue`, contextId)
         .exec();
@@ -729,13 +724,13 @@ class RecordAddon extends Addon {
    * @param {string} text
    * @return {Promise<void>}
    */
-  async #speak(connection, text) {
+  async #speak(guild, connection, text) {
     // 文字列 → 音声
     const { data: mp3 } = await axios.post(`${process.env.OPENAI_API_HOST}/v1/audio/speech`,
       {
-        model: SPEAK_MODEL,
-        voice: SPEAK_VOICE,
-        speed: SPEAK_SPEED,
+        model: this.#getSetting(guild.id, 'speakModel'),
+        voice: this.#getSetting(guild.id, 'speakVoice'),
+        speed: this.#getSetting(guild.id, 'speakSpeed'),
         input: text,
         respose_format: 'mp3',
       },
@@ -760,7 +755,7 @@ class RecordAddon extends Addon {
    */
   async #clean(guildId) {
     // 対象取得
-    const limit = dayjs().tz().subtract(this.settings[guildId]?.expires ?? DEFAULT_EXPIRES, 'second');
+    const limit = dayjs().tz().subtract(this.#getSetting(guildId, 'expires'), 'second');
     const contextIds = await this.#redis.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, 0, limit.valueOf());
     if (!contextIds.length) {
       return;
@@ -790,6 +785,31 @@ class RecordAddon extends Addon {
     return await this.#redis.mGet(contextIds.map(id => `${process.env.REDIS_NAMESPACE}:context:${id}`))
       .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
       .then(contexts => contexts.filter(context => context?.channelId === channel.id))
+  }
+
+  /**
+   * 任意の設定値を取得します。
+   * @param {string} guildId
+   * @param {string} key
+   * @returns {*}
+   */
+  #getSetting(guildId, key) {
+    const settings = this.settings[guildId]?.[0] ?? {};
+
+    const defaultSettings = {
+      expires: 12 * 60 * 60,
+      defaultSummaryType: 'official',
+      autoSummarizeAbortDuration: 30 * 60,
+      autoSummarizeMinDuration: 10 *60,
+      autoSummarizeDelayTime: 30,
+      captureTimeout: 1,
+      captureMinDuration: 3,
+      speakSpeed: 0.9,
+      speakModel: 'tts-1',
+      speakVoice: 'nova',
+    };
+
+    return settings[key] ?? defaultSettings[key];
   }
 
   /**
