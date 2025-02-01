@@ -19,7 +19,7 @@ const clients = [process.env.DISCORD_TOKEN_1, process.env.DISCORD_TOKEN_2]
       ],
     }),
   ])
-  .map(([token, client]) => {
+  .map(([token, client], index) => {
     // クライアントログイン
     client.login(token);
 
@@ -27,7 +27,7 @@ const clients = [process.env.DISCORD_TOKEN_1, process.env.DISCORD_TOKEN_2]
     addons.forEach(addon => (new addon()).register(client));
 
     client.once('ready', async () => {
-      [...client.guilds.cache.keys()].forEach((guildId, index) => {
+      [...client.guilds.cache.keys()].forEach(guildId => {
         console.info(`Bot#${index}は <${client.user.tag}@${client.guilds.cache.get(guildId).name}> でログインしました。`);
       });
     });
