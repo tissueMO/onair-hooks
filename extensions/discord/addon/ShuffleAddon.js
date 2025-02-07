@@ -155,6 +155,7 @@ class ShuffleAddon extends Addon {
 
     // 対象ユーザーでシャッフル
     const members = channels
+      .filter(c => !!c)
       .map(c => [...c.members.values()])
       .flat()
       .filter(m => !m.user.bot)
