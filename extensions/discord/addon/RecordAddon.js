@@ -781,6 +781,9 @@ class RecordAddon extends Addon {
    */
   async #fetchContexts(channel, start, end) {
     const contextIds = await this.#redis.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, start.valueOf(), end.valueOf());
+    if (!contextIds.length) {
+      return [];
+    }
 
     return await this.#redis.mGet(contextIds.map(id => `${process.env.REDIS_NAMESPACE}:context:${id}`))
       .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
