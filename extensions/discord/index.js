@@ -1,9 +1,9 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const { RecordAddon, HookAddon, FollowAddon, ShuffleAddon, Addon } = require('./addon');
+const { RecordAddon, HookAddon, ShuffleAddon, Addon } = require('./addon');
 
 // アドオン定義
 /** @type {(typeof Addon)[]} */
-const addons = [HookAddon, FollowAddon, ShuffleAddon, RecordAddon];
+const addons = [HookAddon, ShuffleAddon, RecordAddon];
 
 // Discord クライアント
 /** @type {Client[]} */
