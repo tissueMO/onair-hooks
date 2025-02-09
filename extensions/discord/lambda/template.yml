@@ -50,7 +50,7 @@ Resources:
       Handler: index.convert
       Runtime: nodejs20.x
       CodeUri: src/
-      Timeout: 15
+      Timeout: 30
       MemorySize: 512
       Layers:
         - !Ref OnAirHooksLayer
@@ -82,7 +82,7 @@ Resources:
       Handler: index.transcribe
       Runtime: nodejs20.x
       CodeUri: src/
-      Timeout: 15
+      Timeout: 30
       MemorySize: 512
       VpcConfig:
         SubnetIds: !Split [',', !Ref SubnetIds]
