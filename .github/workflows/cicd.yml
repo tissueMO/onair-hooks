@@ -62,7 +62,7 @@ jobs:
         env:
           GITHUB_REPOSITORY: ghcr.io/${{ github.repository }}/discord-extension
         run: |
-          docker pull ghcr.io/${GITHUB_REPOSITORY,,}/discord-extension:latest
+          docker pull ghcr.io/${GITHUB_REPOSITORY,,}/discord-extension:main
 
       - name: Environment Variables
         run: |
@@ -80,5 +80,5 @@ jobs:
         run: |
           docker run
             --env-file .env \
-            ghcr.io/${{ github.repository }}/discord-extension:latest \
+            ghcr.io/${{ github.repository }}/discord-extension:main \
             ./deploy.sh
