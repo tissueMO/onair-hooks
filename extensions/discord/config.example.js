@@ -7,7 +7,6 @@ module.exports = {
   records: [
     {
       guildId: '111111111111111111',
-      expires: 43200,
       defaultSummaryType: 'official',
       autoSummarizeDelayTime: 30,
       autoSummarizeMinDuration: 600,
@@ -34,13 +33,6 @@ module.exports = {
         url: 'https://example.com/',
         method: 'get',
       },
-    },
-  ],
-  follows: [
-    {
-      guildId: '111111111111111111',
-      followerUserId: '111111111111111111',
-      followeeUserId: '111111111111111111',
     },
   ],
 };

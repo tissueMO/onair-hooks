@@ -5,7 +5,6 @@ const { createWriteStream, createReadStream } = require('fs');
 const { pipeline } = require('stream/promises');
 const { v4: uuid } = require('uuid');
 const fs = require('fs').promises;
-const path = require('path');
 const prism = require('prism-media');
 const { createRedisClient, parseTime } = require('../common');
 const { RedisClientType } = require('@redis/client');
@@ -20,7 +19,8 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.tz.setDefault('Asia/Tokyo');
 
-const s3Client = new S3Client();
+const s3 = new S3Client();
+const EXPIRES = 43200;
 
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
@@ -578,7 +578,7 @@ class RecordAddon extends Addon {
       }
 
       // アップロード (pcm)
-      await s3Client.send(new PutObjectCommand({
+      await s3.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
         Key: `${process.env.S3_PREFIX}/${process.env.REDIS_NAMESPACE}/${baseName}`,
         Body: createReadStream(pcmFile),
@@ -586,7 +586,7 @@ class RecordAddon extends Addon {
 
       // コンテキスト保存
       await this.#redis.multi()
-        .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, this.#getSetting(guildId, 'expires'), JSON.stringify(context))
+        .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, EXPIRES, JSON.stringify(context))
         .zAdd(`${process.env.REDIS_NAMESPACE}:contexts`, { score: dayjs(context.start).valueOf(), value: contextId })
         .exec();
 
@@ -749,7 +749,7 @@ class RecordAddon extends Addon {
    */
   async #clean(guildId) {
     // 対象取得
-    const limit = dayjs().tz().subtract(this.#getSetting(guildId, 'expires'), 'second');
+    const limit = dayjs().tz().subtract(EXPIRES, 'second');
     const contextIds = await this.#redis.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, 0, limit.valueOf());
     if (!contextIds.length) {
       return;
@@ -794,7 +794,6 @@ class RecordAddon extends Addon {
     const settings = this.settings[guildId]?.[0] ?? {};
 
     const defaultSettings = {
-      expires: 12 * 60 * 60,
       defaultSummaryType: 'official',
       autoSummarizeAbortDuration: 30 * 60,
       autoSummarizeMinDuration: 10 *60,

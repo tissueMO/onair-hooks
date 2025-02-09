@@ -1,5 +1,5 @@
 const Addon = require('./Addon');
-const axios = require('axios').default;
+const { default: axios } = require('axios');
 const { VoiceState } = require('discord.js');
 
 /**

@@ -8,7 +8,8 @@ import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
-const s3Client = new S3Client();
+const s3 = new S3Client();
+const EXPIRES = 43200;
 
 /**
  * PCM→MP3形式に変換します。
@@ -25,15 +26,15 @@ export async function convert(event) {
   const srcPath = path.join(`/tmp/${id}.pcm`);
   const destPath = path.join(`/tmp/${id}.mp3`);
 
-  // (pcm) ダウンロード・削除
-  const { Body: srcData } = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  // (PCM) ダウンロード・削除
+  const { Body: srcData } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   await pipeline(srcData, createWriteStream(srcPath));
 
   // PCM→MP3 変換
   await pcmToMp3(srcPath, destPath);
 
-  // (mp3) アップロード
-  await s3Client.send(new PutObjectCommand({
+  // (MP3) アップロード
+  await s3.send(new PutObjectCommand({
     Bucket: bucket,
     Key: `${prefix}/${id}.mp3`,
     Body: createReadStream(destPath),
@@ -43,7 +44,7 @@ export async function convert(event) {
   // 後片付け
   await fs.unlink(srcPath);
   await fs.unlink(destPath);
-  await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 
   console.info(`ID: ${id} の変換完了`);
 }
@@ -57,14 +58,14 @@ export async function transcribe(event) {
   const id = path.parse(key).name;
   const prefix = path.parse(key).dir;
 
-  console.info(`ID: ${id} の変換開始...`);
+  console.info(`ID: ${id} の文字起こし開始...`);
 
   // 対象ファイルパス
   const namespace = path.basename(prefix);
   const srcPath = path.join(`/tmp/${id}.mp3`);
 
-  // (mp3) ダウンロード・削除
-  const { Body: srcData } = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  // (MP3) ダウンロード・削除
+  const { Body: srcData } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   await pipeline(srcData, createWriteStream(srcPath));
 
   // 文字起こし実行
@@ -89,22 +90,22 @@ export async function transcribe(event) {
   } finally {
     // 後片付け
     await fs.unlink(srcPath);
-    await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
   }
 
   // コンテキストを更新
-  const redisClient = await createClient({ url: process.env.REDIS_HOST }).connect();
-  const context = await redisClient.get(`${namespace}:context:${id}`)
+  const redis = await createClient({ url: process.env.REDIS_HOST }).connect();
+  const context = await redis.get(`${namespace}:context:${id}`)
     .then(context => context ? JSON.parse(context) : null);
 
   if (!context) {
-    console.warn(`ID: ${id} の変換失敗: 格納先コンテキストがありません。`);
+    console.warn(`ID: ${id} 処理失敗: 格納先コンテキストがありません。`);
     return;
   }
 
   context['transcription'] = transcription;
 
-  await redisClient.set(`${namespace}:context:${id}`, JSON.stringify(context));
+  await redis.setEx(`${namespace}:context:${id}`, EXPIRES, JSON.stringify(context));
 
   console.info(`ID: ${id} の文字起こし完了`);
 }

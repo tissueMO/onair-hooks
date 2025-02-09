@@ -1,6 +1,5 @@
 const { createClient } = require('redis');
 const { RedisClientType } = require('@redis/client');
-const FormData = require('form-data');
 const dayjs = require('dayjs');
 const timezone = require('dayjs/plugin/timezone');
 const utc = require('dayjs/plugin/utc');
@@ -46,18 +45,3 @@ exports.chunkArray = (array, size) => {
 exports.createRedisClient = () => {
   return createClient({ url: process.env.REDIS_HOST }).connect();
 };
-
-/**
- * データを元にFormDataを生成します。
- * @param {Object} data
- * @returns {FormData}
- */
-exports.createFormData = (data) => {
-  const formData = new FormData();
-
-  for (const [key, value] of Object.entries(data)) {
-    formData.append(key, value);
-  }
-
-  return formData;
-}
