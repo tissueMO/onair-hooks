@@ -80,7 +80,4 @@ jobs:
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          docker run
-            --env-file .env \
-            ghcr.io/${GITHUB_REPOSITORY,,}/discord-extension:main \
-            ./deploy.sh
+          docker run --env-file .env ghcr.io/${GITHUB_REPOSITORY,,}/discord-extension:main ./deploy.sh
