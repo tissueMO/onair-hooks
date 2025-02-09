@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  SubnetIds:
+    Type: String
+    Description: 'Comma-separated list of Subnet IDs'
+  SecurityGroupIds:
+    Type: String
+    Description: 'Comma-separated list of Security Group IDs'
+  OpenAiApiHost:
+    Type: String
+    Default: https://api.openai.com
+  OpenAiApiKey:
+    Type: String
+  RedisHost:
+    Type: String
+    Default: redis://redis:6379
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: onair-hooks
+
+  FFmpegLayer:
+    Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      ContentUri: layer/
+      Description: 'FFmpeg Layer'
+      CompatibleRuntimes:
+        - nodejs20.x
+
+  OnAirHooksLayer:
+    Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      ContentUri: layer/
+      Description: 'Common Layer for OnAirHooks'
+      CompatibleRuntimes:
+        - nodejs20.x
+
+  ConvertLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OnAirHooksConvert
+      Handler: index.convert
+      Runtime: nodejs20.x
+      CodeUri: src/
+      Timeout: 15
+      MemorySize: 512
+      Layers:
+        - !Ref OnAirHooksLayer
+        - !Ref FFmpegLayer
+      Environment:
+        Variables:
+          FFMPEG_PATH: /opt/bin/ffmpeg
+      Policies:
+        - S3CrudPolicy:
+            BucketName: onair-hooks
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref Bucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: records/
+                  - Name: suffix
+                    Value: .pcm
+
+  TranscribeLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OnAirHooksTranscribe
+      Handler: index.transcribe
+      Runtime: nodejs20.x
+      CodeUri: src/
+      Timeout: 15
+      MemorySize: 512
+      VpcConfig:
+        SubnetIds: !Split [',', !Ref SubnetIds]
+        SecurityGroupIds: !Split [',', !Ref SecurityGroupIds]
+      Layers:
+        - !Ref OnAirHooksLayer
+      Environment:
+        Variables:
+          OPENAI_API_HOST: !Ref OpenAiApiHost
+          OPENAI_API_KEY: !Ref OpenAiApiKey
+          REDIS_HOST: !Ref RedisHost
+      Policies:
+        - S3CrudPolicy:
+            BucketName: onair-hooks
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref Bucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: records/
+                  - Name: suffix
+                    Value: .mp3

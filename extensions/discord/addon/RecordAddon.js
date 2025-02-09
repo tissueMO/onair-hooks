@@ -1,24 +1,26 @@
 const { Client, Guild, VoiceChannel, ChannelType, ApplicationCommandOptionType, GuildScheduledEventStatus, VoiceState, CommandInteraction, GuildScheduledEvent } = require('discord.js');
 const { joinVoiceChannel, EndBehaviorType, VoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
 const Addon = require('./Addon');
-const { createWriteStream } = require('fs');
+const { createWriteStream, createReadStream } = require('fs');
 const { pipeline } = require('stream/promises');
 const { v4: uuid } = require('uuid');
 const fs = require('fs').promises;
 const path = require('path');
 const prism = require('prism-media');
 const { createRedisClient, parseTime } = require('../common');
-const ConvertWorker = require('../worker/ConvertWorker');
 const { RedisClientType } = require('@redis/client');
 const dayjs = require('dayjs');
 const timezone = require('dayjs/plugin/timezone');
 const utc = require('dayjs/plugin/utc');
 const { default: axios } = require('axios');
 const { setTimeout } = require('timers/promises');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.tz.setDefault('Asia/Tokyo');
+
+const s3Client = new S3Client();
 
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
@@ -492,17 +494,15 @@ class RecordAddon extends Addon {
       const userShortName = userName.replace(/　/g, ' ').split(' ')[0];
 
       if (!this.#contexts[userId]) {
-        await Promise.resolve()
-          .then(() => this.#capture(connection, {
-            contextId: uuid(),
-            guildId: guild.id,
-            channelId: channel.id,
-            userId: userId,
-            userName: userName,
-            userShortName: userShortName,
-            start: dayjs().tz().format(),
-          }))
-          .then(context => this.#enqueueConvertWorker(context));
+        await this.#capture(connection, {
+          contextId: uuid(),
+          guildId: guild.id,
+          channelId: channel.id,
+          userId: userId,
+          userName: userName,
+          userShortName: userShortName,
+          start: dayjs().tz().format(),
+        });
       }
     });
 
@@ -549,7 +549,7 @@ class RecordAddon extends Addon {
   async #capture(connection, context) {
     const { contextId, userId, guildId } = context;
     const baseName = `${contextId}.pcm`;
-    const pcmFile = path.join(process.env.WORKER_PATH, baseName);
+    const pcmFile = `/tmp/${baseName}`;
 
     console.info(`[${this.constructor.name}] キャプチャー開始: User<${userId}> Session<${contextId}>`);
     this.#contexts[userId] = context;
@@ -578,34 +578,23 @@ class RecordAddon extends Addon {
         return null;
       }
 
+      // アップロード (pcm)
+      await s3Client.send(new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: `${process.env.S3_PREFIX}/${process.env.REDIS_NAMESPACE}/${baseName}`,
+        Body: createReadStream(pcmFile),
+      }));
+
       console.info(`[${this.constructor.name}] キャプチャー終了: User<${userId}> Session<${contextId}> --> ${pcmFile}`);
       return context;
 
     } catch (err) {
       console.error(`[${this.constructor.name}] キャプチャー失敗: User<${userId}> Session<${contextId}>`, err);
-      await fs.unlink(pcmFile);
       return null;
 
     } finally {
+      await fs.unlink(pcmFile);
       delete this.#contexts[userId];
-    }
-  }
-
-  /**
-   * キャプチャー結果を音声変換ワーカーにキューイングします。
-   * @param {Object} context
-   * @returns {Promise<void>}
-   */
-  async #enqueueConvertWorker(context) {
-    if (context) {
-      const { contextId, guildId, start } = context;
-      const workerPrefix = new ConvertWorker().prefix;
-
-      await this.#redis.multi()
-        .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, this.#getSetting(guildId, 'expires'), JSON.stringify(context))
-        .zAdd(`${process.env.REDIS_NAMESPACE}:contexts`, { score: dayjs(start).valueOf(), value: contextId })
-        .lPush(`${process.env.REDIS_NAMESPACE}:${workerPrefix}:queue`, contextId)
-        .exec();
     }
   }
 
