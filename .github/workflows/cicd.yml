@@ -1,8 +1,8 @@
 name: Build and Deploy
 
 on:
+  workflow_dispatch:
   push:
-    workflow_dispatch:
     branches:
       - main
 
@@ -59,8 +59,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull Image
+        env:
+          GITHUB_REPOSITORY: ghcr.io/${{ github.repository }}/discord-extension
         run: |
-          docker pull ghcr.io/${{ github.repository }}/discord-extension:latest
+          docker pull ghcr.io/${GITHUB_REPOSITORY,,}/discord-extension:latest
 
       - name: Environment Variables
         run: |
