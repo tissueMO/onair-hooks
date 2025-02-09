@@ -60,7 +60,7 @@ jobs:
 
       - name: Pull Image
         env:
-          GITHUB_REPOSITORY: ghcr.io/${{ github.repository }}/discord-extension
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           docker pull ghcr.io/${GITHUB_REPOSITORY,,}/discord-extension:main
 
@@ -77,8 +77,10 @@ jobs:
           echo "AWS_REGION=ap-northeast-1" >> .env
 
       - name: Build and Deploy
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           docker run
             --env-file .env \
-            ghcr.io/${{ github.repository }}/discord-extension:main \
+            ghcr.io/${GITHUB_REPOSITORY,,}/discord-extension:main \
             ./deploy.sh
