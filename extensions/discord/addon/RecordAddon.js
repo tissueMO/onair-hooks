@@ -574,7 +574,6 @@ class RecordAddon extends Addon {
       const timeSpan = dayjs(context.end).diff(dayjs(context.start), 'second');
       if (timeSpan < this.#getSetting(guildId, 'captureMinDuration')) {
         console.info(`[${this.constructor.name}] キャプチャー中止: User<${userId}> Session<${contextId}>`);
-        await fs.unlink(pcmFile);
         return null;
       }
 
@@ -584,6 +583,12 @@ class RecordAddon extends Addon {
         Key: `${process.env.S3_PREFIX}/${process.env.REDIS_NAMESPACE}/${baseName}`,
         Body: createReadStream(pcmFile),
       }));
+
+      // コンテキスト保存
+      await this.#redis.multi()
+        .setEx(`${process.env.REDIS_NAMESPACE}:context:${contextId}`, this.#getSetting(guildId, 'expires'), JSON.stringify(context))
+        .zAdd(`${process.env.REDIS_NAMESPACE}:contexts`, { score: dayjs(context.start).valueOf(), value: contextId })
+        .exec();
 
       console.info(`[${this.constructor.name}] キャプチャー終了: User<${userId}> Session<${contextId}> --> ${pcmFile}`);
       return context;
