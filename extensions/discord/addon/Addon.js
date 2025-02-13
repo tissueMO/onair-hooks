@@ -86,15 +86,6 @@ class Addon {
   }
 
   /**
-   * スケジュールハンドラー定義
-   * ※プライマリークライアントのみ有効
-   * @returns {Object[]}
-   */
-  get scheduleHandlers() {
-    return [];
-  }
-
-  /**
    * イベントリスナー定義
    * @returns {Object[]}
    */
@@ -162,32 +153,6 @@ class Addon {
         }
       });
     }
-
-    // スケジュール監視
-    CronJob.from({
-      cronTime: '0 * * * * *',
-      start: true,
-      timeZone: 'Asia/Tokyo',
-      onTick: async () => {
-        const events = [...(
-          await guild.scheduledEvents.fetch()
-            .then(events => events
-              .filter(event =>
-                (event.status === GuildScheduledEventStatus.Scheduled || event.status === GuildScheduledEventStatus.Active)
-                  && dayjs(event.scheduledStartAt).format('YYYYMMDDHHmm') === dayjs().format('YYYYMMDDHHmm')
-              )
-              .values()
-            )
-        )];
-
-        for (const handler of this.scheduleHandlers) {
-          const handleEvents = events.filter(event => handler.isHandle(event));
-          if (handleEvents.length > 0) {
-            await handler.handle(guild, handleEvents);
-          }
-        }
-      },
-    });
   }
 
   /**

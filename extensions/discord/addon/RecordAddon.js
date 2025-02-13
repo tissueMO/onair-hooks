@@ -63,11 +63,6 @@ class RecordAddon extends Addon {
         description: 'ボイスチャンネルに議事録要約Botを参加させます。',
         options: [
           {
-            name: 'silent',
-            description: 'Botが退出しても要約を自動生成しません。',
-            type: ApplicationCommandOptionType.Boolean,
-          },
-          {
             name: 'type',
             description: '自動生成する要約のタイプ名 (official or casual)',
             type: ApplicationCommandOptionType.String,
@@ -176,12 +171,11 @@ class RecordAddon extends Addon {
 
         // パラメーター解析
         const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
-        const silent = interaction.options.getBoolean('silent');
         const type = interaction.options.getString('type') ?? this.#getSetting(guild.id, 'defaultSummaryType');
 
         // 記録開始
         try {
-          await this.#startRecord(guild, channel, { enabled: !silent, type: type });
+          await this.#startRecord(guild, channel, { type: type });
           return 'OK';
         } catch (err) {
           return err.message;
@@ -301,65 +295,9 @@ class RecordAddon extends Addon {
   /**
    * @override
    */
-  get scheduleHandlers() {
-    return [
-      {
-        /**
-         * イベントをハンドルするかどうかを返します。
-         * @param {GuildScheduledEvent<GuildScheduledEventStatus>} event
-         * @returns {boolean}
-         */
-        isHandle: event => event.description.includes('@record'),
-
-        /**
-         * スケジュールイベントに議事録要約Botを参加させます。
-         * スケジュールの説明に `@record` を含める必要があります。
-         * `@record(...)` と入力することで要約のタイプ名を指定することができます。
-         * @param {Guild} guild
-         * @param {GuildScheduledEvent<GuildScheduledEventStatus>[]} events
-         */
-        handle: async (guild, events) => {
-          for (const event of events) {
-            console.info(`[${this.constructor.name}] スケジュール参加: ${event.channel.name}`);
-
-            // 記録開始
-            try {
-              const type = event.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
-
-              await this.#startRecord(guild, event.channel, { enabled: true, type: type });
-
-              // ※複数チャンネルで同じBotが重複参加してしまうのを防ぐ
-              await setTimeout(3000);
-
-            } catch (err) {
-            }
-          }
-
-          // 一定時間経っても誰もいなければ中止する
-          await setTimeout(this.#getSetting(guild.id, 'autoSummarizeAbortDuration') * 1000);
-
-          for (const event of events) {
-            const members = event.channel.members;
-            const onlyBot = members.filter(member => member.user.bot).size > 0 && members.filter(member => !member.user.bot).size === 0;
-
-            if (!onlyBot) {
-              console.info(`[${this.constructor.name}] スケジュール参加継続: ${event.channel.name}`);
-            } else {
-              console.info(`[${this.constructor.name}] スケジュール参加しましたが、参加者がいないため中止します: ${event.channel.name}`);
-              await this.#endRecord(guild, event.channel);
-            }
-          }
-        },
-      }
-    ];
-  }
-
-  /**
-   * @override
-   */
   get events() {
-    return [
-      // 誰もいなくなったら退出し、要約を自動生成する
+    return !this.isPrimary ? [] : [
+      // 誰もいなくなったら退出し、スケジュールイベントを終了する
       {
         name: 'voiceStateUpdate',
         handler: async (/** @type {VoiceState} */ oldState, /** @type {VoiceState} */ newState) => {
@@ -378,7 +316,7 @@ class RecordAddon extends Addon {
             return;
           }
 
-          // 誰もいなくなったら退出する
+          // 誰もいなくなったらBotも退出する
           if (botChannel && oldState.channelId === botChannel.id && oldState.channelId !== newState.channelId) {
             const members = botChannel.members.filter(member => !member.user.bot);
             if (members.size === 0) {
@@ -388,20 +326,73 @@ class RecordAddon extends Addon {
             return;
           }
 
-          // Botが退出したら一定時間後に要約する
+          // Botが退出したらスケジュールイベントを終了する
           if (newState.id === botId && oldState.channelId !== null && newState.channelId === null) {
+            const events = [...(
+              await guild.scheduledEvents.fetch()
+                .then(events => events
+                  .filter(event => oldState.channelId === event.channelId && event.status === GuildScheduledEventStatus.Active)
+                  .values()
+                )
+            )];
+
+            for (const event of events) {
+              await event.setStatus(GuildScheduledEventStatus.Completed);
+            }
+          }
+        },
+      },
+
+      // スケジュールイベントの開始と終了に合わせて記録を開始・終了する
+      {
+        name: 'guildScheduledEventUpdate',
+        handler: async (/** @type {GuildScheduledEvent} */ oldEvent, /** @type {GuildScheduledEvent} */ newEvent) => {
+          const guild = oldEvent.guild;
+          if (!this.isHandle(guild)) {
+            return;
+          }
+
+          // 記録開始
+          if (
+            oldEvent.status === GuildScheduledEventStatus.Scheduled &&
+            newEvent.status === GuildScheduledEventStatus.Active &&
+            newEvent.description.includes('@record')
+          ) {
+            console.info(`[${this.constructor.name}] スケジュール参加: ${newEvent.channel.name}`);
+
+            try {
+              const type = newEvent.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
+              await this.#startRecord(guild, newEvent.channel, { enabled: true, type: type });
+            } catch (err) {
+              console.warn(`[${this.constructor.name}] スケジュール参加失敗: ${err}`);
+            }
+          }
+
+          // 記録終了し、要約を自動生成する
+          if (
+            oldEvent.status === GuildScheduledEventStatus.Active &&
+            newEvent.status === GuildScheduledEventStatus.Completed &&
+            newEvent.description.includes('@record')
+          ) {
+            // 対象Botを特定
+            const botId = this.client.user.id;
+            const connection = RecordAddon.#connections[botId];
+            if (!connection) {
+              return;
+            }
+
             // 要約パラメーター
             const start = dayjs(connection.start).tz();
             const end = dayjs().tz();
             const timeSpan = end.diff(start, 'second');
-            const autoSummary = connection.autoSummary;
+            const { type } = connection.autoSummary;
             const defaultChannelId = this.#getSetting(guild.id, 'defaultChannelId');
 
             // ボイスチャンネルから切断
             connection.connection.destroy();
             delete RecordAddon.#connections[botId];
 
-            if (!autoSummary.enabled || !defaultChannelId) {
+            if (!defaultChannelId) {
               console.info(`[${this.constructor.name}] 自動要約を行いません。`);
               return;
             }
@@ -415,7 +406,7 @@ class RecordAddon extends Addon {
             console.info(`[${this.constructor.name}] ${delay}秒後に要約します。`);
             await setTimeout(delay * 1000);
 
-            const summary = await this.#summarize(lastChannel, start, end, autoSummary.type);
+            const summary = await this.#summarize(newEvent.channel, start, end, type);
             if (!summary) {
               console.info(`[${this.constructor.name}] 該当期間の記録データがありません。`);
               return;
@@ -456,7 +447,7 @@ class RecordAddon extends Addon {
    * @param {Object} summaryOption
    * @returns {Promise<void>}
    */
-  async #startRecord(guild, channel, summaryOptions = { enabled: true }) {
+  async #startRecord(guild, channel, summaryOptions = {}) {
     await this.#clean(guild.id);
 
     if (!channel) {
@@ -795,8 +786,7 @@ class RecordAddon extends Addon {
 
     const defaultSettings = {
       defaultSummaryType: 'official',
-      autoSummarizeAbortDuration: 30 * 60,
-      autoSummarizeMinDuration: 10 *60,
+      autoSummarizeMinDuration: 10 * 60,
       autoSummarizeDelayTime: 30,
       captureTimeout: 1,
       captureMinDuration: 3,
