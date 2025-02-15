@@ -7,10 +7,10 @@ module.exports = {
   records: [
     {
       guildId: '111111111111111111',
+      defaultChannelId: '111111111111111111',
       defaultSummaryType: 'official',
       autoSummarizeDelayTime: 30,
       autoSummarizeMinDuration: 600,
-      autoSummarizeAbortDuration: 1800,
       captureTimeout: 1,
       captureMinDuration: 3,
     },

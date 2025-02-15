@@ -23,13 +23,22 @@ const clients = [process.env.DISCORD_TOKEN_1, process.env.DISCORD_TOKEN_2]
     // クライアントログイン
     client.login(token);
 
-    // アドオン登録
-    addons.forEach(addon => (new addon()).register(client));
-
     client.once('ready', async () => {
-      [...client.guilds.cache.keys()].forEach(guildId => {
+      const guildIds = client.guilds.cache.keys();
+      for (const guildId of guildIds) {
         console.info(`Bot#${index}は <${client.user.tag}@${client.guilds.cache.get(guildId).name}> でログインしました。`);
-      });
+      }
+
+      // コマンド初期化
+      for (const guildId of guildIds) {
+        const oldCommands = await client.application.commands.fetch({ guildId: guildId });
+        await Promise.all([...oldCommands.values()].map(command => command.delete()));
+      }
+
+      // アドオン登録
+      await Promise.all(addons.map(addon => (new addon()).register(client)));
+
+      console.info(`Bot#${index}の起動が完了しました。`);
     });
 
     return client;

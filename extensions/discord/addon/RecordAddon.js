@@ -143,7 +143,7 @@ class RecordAddon extends Addon {
             description: '発話内容',
             type: ApplicationCommandOptionType.String,
             required: true,
-          }
+          },
         ],
       },
     ];
@@ -278,7 +278,7 @@ class RecordAddon extends Addon {
         await interaction.reply({ content: 'OK', ephemeral: true });
 
         // 発話
-        const connection = RecordAddon.#connections[botId]?.connection;
+        const connection = RecordAddon.#connections[botId];
         await this.#speak(guild, connection, text);
 
         return null;
@@ -290,7 +290,7 @@ class RecordAddon extends Addon {
    * @override
    */
   get events() {
-    return !this.isPrimary ? [] : [
+    return [
       // 誰もいなくなったら退出し、スケジュールイベントを終了する
       {
         name: 'voiceStateUpdate',
@@ -306,22 +306,23 @@ class RecordAddon extends Addon {
           const botId = this.client.user.id;
           const botChannel = guild.channels.cache.find(channel => channel.type === ChannelType.GuildVoice && channel.members.has(botId));
           const connection = RecordAddon.#connections[botId];
-          if (!connection) {
-            return;
-          }
 
           // 誰もいなくなったらBotも退出する
           if (botChannel && oldState.channelId === botChannel.id && oldState.channelId !== newState.channelId) {
             const members = botChannel.members.filter(member => !member.user.bot);
             if (members.size === 0) {
-              connection.connection.disconnect();
+              connection?.disconnect();
               console.info(`[${this.constructor.name}] Botが <${lastChannel.name}> から退出しました。`);
             }
             return;
           }
 
-          // Botが退出したらスケジュールイベントを終了する
+          // Botが退出したらスケジュールイベントを終了する ※ユーザーが作成したイベントを操作するにはイベントの管理権限が必要
           if (newState.id === botId && oldState.channelId !== null && newState.channelId === null) {
+            // ボイスチャンネルとの接続を破棄
+            connection?.destroy();
+            delete RecordAddon.#connections[botId];
+
             const events = [...(
               await guild.scheduledEvents.fetch()
                 .then(events => events
@@ -330,9 +331,8 @@ class RecordAddon extends Addon {
                 )
             )];
 
-            for (const event of events) {
-              await event.setStatus(GuildScheduledEventStatus.Completed);
-            }
+            events.forEach(event => console.info(`[${this.constructor.name}] Botが 記録スケジュールイベント <${event.channel.name}> ${event.name} を終了します。`));
+            await Promise.allSettled(events.map(event => event.setStatus(GuildScheduledEventStatus.Completed)));
           }
         },
       },
@@ -342,21 +342,18 @@ class RecordAddon extends Addon {
         name: 'guildScheduledEventUpdate',
         handler: async (/** @type {GuildScheduledEvent} */ oldEvent, /** @type {GuildScheduledEvent} */ newEvent) => {
           const guild = oldEvent.guild;
-          if (!this.isHandle(guild)) {
+          if (!this.isHandle(guild) || !this.isPrimary || !newEvent.description.startsWith('@record')) {
             return;
           }
 
           // 記録開始
           if (
             oldEvent.status === GuildScheduledEventStatus.Scheduled &&
-            newEvent.status === GuildScheduledEventStatus.Active &&
-            newEvent.description.includes('@record')
+            newEvent.status === GuildScheduledEventStatus.Active
           ) {
-            console.info(`[${this.constructor.name}] スケジュールイベント開始: ${newEvent.channel.name}`);
-
+            console.info(`[${this.constructor.name}] スケジュールイベント <${newEvent.channel.name}> ${newEvent.name} が開始しました。`);
             try {
-              const type = newEvent.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
-              await this.#startRecord(guild, newEvent.channel, { type: type });
+              await this.#startRecord(guild, newEvent.channel);
             } catch (err) {
               console.warn(`[${this.constructor.name}] スケジュールイベント参加失敗: ${err}`);
             }
@@ -365,28 +362,18 @@ class RecordAddon extends Addon {
           // 記録終了し、要約を自動生成する
           if (
             oldEvent.status === GuildScheduledEventStatus.Active &&
-            newEvent.status === GuildScheduledEventStatus.Completed &&
-            newEvent.description.includes('@record')
+            newEvent.status === GuildScheduledEventStatus.Completed
           ) {
-            console.info(`[${this.constructor.name}] スケジュールイベント終了: ${newEvent.channel.name}`);
-
-            // 対象Botを特定
-            const botId = this.client.user.id;
-            const connection = RecordAddon.#connections[botId];
-            if (!connection || !connection.summaryOptions) {
-              return;
-            }
+            console.info(`[${this.constructor.name}] スケジュールイベント <${newEvent.channel.name}> ${newEvent.name} が終了しました。`);
 
             // 要約パラメーター
-            const start = dayjs(connection.start).tz();
+            const start = dayjs(newEvent.scheduledStartAt).tz();
             const end = dayjs().tz();
             const timeSpan = end.diff(start, 'second');
-            const { type } = connection.summaryOptions;
+            const type = newEvent.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
             const defaultChannelId = this.#getSetting(guild.id, 'defaultChannelId');
 
-            // ボイスチャンネルから切断
-            connection.connection.destroy();
-            delete RecordAddon.#connections[botId];
+            console.info(`[${this.constructor.name}] 記録時間: ${start.format('HH:mm')}-${end.format('HH:mm')} (${timeSpan}秒)`);
 
             if (!defaultChannelId) {
               console.info(`[${this.constructor.name}] 自動要約を行いません。`);
@@ -419,8 +406,8 @@ class RecordAddon extends Addon {
   /**
    * @override
    */
-  register(client) {
-    super.register(client);
+  async register(client) {
+    await super.register(client);
 
     // 全クライアント共通
     RecordAddon.#connections = {};
@@ -431,9 +418,7 @@ class RecordAddon extends Addon {
 
     // クライアント別
     this.#contexts = {};
-    createRedisClient().then(redis => {
-      this.#redis = redis;
-    });
+    this.#redis = await createRedisClient();
   }
 
   /**
@@ -464,7 +449,7 @@ class RecordAddon extends Addon {
 
     // Botをボイスチャンネルに参加させる
     const botId = targetClient?.user?.id;
-    RecordAddon.#connections[botId]?.connection?.destroy();
+    RecordAddon.#connections[botId]?.destroy();
 
     const connection = joinVoiceChannel({
       guildId: guild.id,
@@ -493,11 +478,7 @@ class RecordAddon extends Addon {
       }
     });
 
-    RecordAddon.#connections[botId] = {
-      connection: connection,
-      start: dayjs().tz().format(),
-      summaryOptions: summaryOptions,
-    };
+    RecordAddon.#connections[botId] = connection;
 
     console.info(`[${this.constructor.name}] Botが <${channel.name}> に参加しました。`);
   }
@@ -524,7 +505,7 @@ class RecordAddon extends Addon {
     }
 
     // Bot切断
-    RecordAddon.#connections[botId]?.connection?.disconnect();
+    RecordAddon.#connections[botId]?.disconnect();
   }
 
   /**
@@ -618,8 +599,7 @@ class RecordAddon extends Addon {
     const header = `${today} ${actualStart.format('HH:mm')}-${actualEnd.format('HH:mm')} <${channel.name}> にて:`;
     const lines = contexts
       .map(context => ({ ...context, transcription: context.transcription?.replace(/\n/g, '。') }))
-      .filter(context => !!context.transcription)
-      .map(context => `[${dayjs(context.start).tz().format('HH:mm')}] ${context.userShortName}「${context.transcription}」`);
+      .map(context => `[${dayjs(context.start).tz().format('HH:mm')}] ${context.userShortName}「${context.transcription ?? '(文字起こしできませんでした)'}」`);
 
     return header + '\n\n' + lines.join('\n');
   }

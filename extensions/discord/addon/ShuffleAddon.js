@@ -105,10 +105,9 @@ class ShuffleAddon extends Addon {
   /**
    * @override
    */
-  register(client) {
-    super.register(client);
-
-    ShuffleAddon.#loadConfig(client);
+  async register(client) {
+    await super.register(client);
+    await ShuffleAddon.#loadConfig(client);
   }
 
   /**

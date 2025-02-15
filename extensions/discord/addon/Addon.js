@@ -1,6 +1,4 @@
-const { Guild, GuildScheduledEventStatus } = require('discord.js');
-const { CronJob } = require('cron');
-const dayjs = require('dayjs');
+const { Guild, Client } = require('discord.js');
 const config = require('../config');
 
 /**
@@ -94,38 +92,36 @@ class Addon {
   }
 
   /**
-   * Discordクライアントにこのアドオンを登録します。
+   * ログイン済みのDiscordクライアントにこのアドオンを登録します。
    * @param {Client} client
+   * @returns {Promise<void>}
    */
-  register(client) {
-    client.once('ready', async () => {
-      this.#isPrimary = (client.user.id === process.env.PRIMARY_BOT_ID);
-      const guildIds = [...client.guilds.cache.keys()];
-
-      // サーバーごとに初期化
-      this.#guilds = guildIds.reduce((guilds, guildId) => {
-        guilds[guildId] = client.guilds.cache.get(guildId);
-        return guilds;
-      }, {});
-
-      this.#settings = guildIds.reduce((settings, guildId) => {
-        settings[guildId] = config[this.configKey]?.filter(f => f.guildId === guildId) ?? [];
-        return settings;
-      }, {});
-
-      await Promise.all(guildIds
-        .map(guildId => this.#guilds[guildId])
-        .filter(guild => this.isHandle(guild))
-        .map(guild => this.initialize(guild))
-      );
-
-      // イベント登録
-      for (const event of this.events) {
-        client.on(event.name, async (...args) => event.handler(...args))
-      }
-    });
-
+  async register(client) {
     this.#client = client;
+    this.#isPrimary = (client.user.id === process.env.PRIMARY_BOT_ID);
+    const guildIds = [...client.guilds.cache.keys()];
+
+    // サーバーごとに初期化
+    this.#guilds = guildIds.reduce((guilds, guildId) => {
+      guilds[guildId] = client.guilds.cache.get(guildId);
+      return guilds;
+    }, {});
+
+    this.#settings = guildIds.reduce((settings, guildId) => {
+      settings[guildId] = config[this.configKey]?.filter(f => f.guildId === guildId) ?? [];
+      return settings;
+    }, {});
+
+    await Promise.all(guildIds
+      .map(guildId => this.#guilds[guildId])
+      .filter(guild => this.isHandle(guild))
+      .map(guild => this.initialize(guild))
+    );
+
+    // イベントリスナー登録
+    for (const event of this.events) {
+      client.on(event.name, async (...args) => event.handler(...args))
+    }
   }
 
   /**
@@ -140,7 +136,7 @@ class Addon {
     }
 
     // コマンド登録
-    for (const command of this.commandDefinitions) {
+    await Promise.all(this.commandDefinitions.map(async command => {
       await this.client.application.commands.create(command, guild.id);
 
       this.client.on('interactionCreate', async (/** @type {CommandInteraction} */ interaction) => {
@@ -152,7 +148,7 @@ class Addon {
           }
         }
       });
-    }
+    }));
   }
 
   /**
