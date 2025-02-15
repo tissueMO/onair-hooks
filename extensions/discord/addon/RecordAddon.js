@@ -59,14 +59,9 @@ class RecordAddon extends Addon {
   get commandDefinitions() {
     return [
       {
-        name: 'record-start',
+        name: 'record',
         description: 'ボイスチャンネルに議事録要約Botを参加させます。',
         options: [
-          {
-            name: 'type',
-            description: '自動生成する要約のタイプ名 (official or casual)',
-            type: ApplicationCommandOptionType.String,
-          },
           {
             name: 'channel',
             description: '参加チャンネル',
@@ -76,7 +71,7 @@ class RecordAddon extends Addon {
         ],
       },
       {
-        name: 'record-view',
+        name: 'transcribe',
         description: '指定したチャンネルの時間範囲における文字起こしを取得します。',
         options: [
           {
@@ -105,7 +100,7 @@ class RecordAddon extends Addon {
         ],
       },
       {
-        name: 'record-summary',
+        name: 'summarize',
         description: '指定したチャンネルの時間範囲における要約を取得します。',
         options: [
           {
@@ -133,7 +128,7 @@ class RecordAddon extends Addon {
           },
           {
             name: 'type',
-            description: 'タイプ名 (official or casual)',
+            description: '要約タイプ (official or casual)',
             type: ApplicationCommandOptionType.String,
             minLength: 1,
           },
@@ -166,16 +161,15 @@ class RecordAddon extends Addon {
        * @param {CommandInteraction} interaction
        * @returns {Promise<string>}
        */
-      'record-start': async (guild, interaction) => {
+      record: async (guild, interaction) => {
         console.info(`[${this.constructor.name}] <${guild.name}> コマンド: 記録開始`);
 
         // パラメーター解析
         const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
-        const type = interaction.options.getString('type') ?? this.#getSetting(guild.id, 'defaultSummaryType');
 
         // 記録開始
         try {
-          await this.#startRecord(guild, channel, { type: type });
+          await this.#startRecord(guild, channel);
           return 'OK';
         } catch (err) {
           return err.message;
@@ -188,7 +182,7 @@ class RecordAddon extends Addon {
        * @param {CommandInteraction} interaction
        * @returns {Promise<null>}
        */
-      'record-view': async (guild, interaction) => {
+      transcribe: async (guild, interaction) => {
         console.info(`[${this.constructor.name}] <${guild.name}> コマンド: 文字起こし`);
 
         // 応答遅延
@@ -227,7 +221,7 @@ class RecordAddon extends Addon {
        * @param {CommandInteraction} interaction
        * @returns {Promise<null>}
        */
-      'record-summary': async (guild, interaction) => {
+      summarize: async (guild, interaction) => {
         console.info(`[${this.constructor.name}] <${guild.name}> コマンド: 要約`);
 
         // 応答遅延
@@ -358,13 +352,13 @@ class RecordAddon extends Addon {
             newEvent.status === GuildScheduledEventStatus.Active &&
             newEvent.description.includes('@record')
           ) {
-            console.info(`[${this.constructor.name}] スケジュール参加: ${newEvent.channel.name}`);
+            console.info(`[${this.constructor.name}] スケジュールイベント開始: ${newEvent.channel.name}`);
 
             try {
               const type = newEvent.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
-              await this.#startRecord(guild, newEvent.channel, { enabled: true, type: type });
+              await this.#startRecord(guild, newEvent.channel, { type: type });
             } catch (err) {
-              console.warn(`[${this.constructor.name}] スケジュール参加失敗: ${err}`);
+              console.warn(`[${this.constructor.name}] スケジュールイベント参加失敗: ${err}`);
             }
           }
 
@@ -374,10 +368,12 @@ class RecordAddon extends Addon {
             newEvent.status === GuildScheduledEventStatus.Completed &&
             newEvent.description.includes('@record')
           ) {
+            console.info(`[${this.constructor.name}] スケジュールイベント終了: ${newEvent.channel.name}`);
+
             // 対象Botを特定
             const botId = this.client.user.id;
             const connection = RecordAddon.#connections[botId];
-            if (!connection) {
+            if (!connection || !connection.summaryOptions) {
               return;
             }
 
@@ -385,7 +381,7 @@ class RecordAddon extends Addon {
             const start = dayjs(connection.start).tz();
             const end = dayjs().tz();
             const timeSpan = end.diff(start, 'second');
-            const { type } = connection.autoSummary;
+            const { type } = connection.summaryOptions;
             const defaultChannelId = this.#getSetting(guild.id, 'defaultChannelId');
 
             // ボイスチャンネルから切断
@@ -444,11 +440,11 @@ class RecordAddon extends Addon {
    * Botによる音声記録を開始します。
    * @param {Guild} guild
    * @param {VoiceChannel} channel
-   * @param {Object} summaryOption
+   * @param {Object?} summaryOptions
    * @returns {Promise<void>}
    */
-  async #startRecord(guild, channel, summaryOptions = {}) {
-    await this.#clean(guild.id);
+  async #startRecord(guild, channel, summaryOptions = null) {
+    await this.#clean();
 
     if (!channel) {
       console.warn(`[${this.constructor.name}] Bot参加失敗: チャンネル指定なし`);
@@ -500,7 +496,7 @@ class RecordAddon extends Addon {
     RecordAddon.#connections[botId] = {
       connection: connection,
       start: dayjs().tz().format(),
-      autoSummary: summaryOptions,
+      summaryOptions: summaryOptions,
     };
 
     console.info(`[${this.constructor.name}] Botが <${channel.name}> に参加しました。`);
@@ -735,10 +731,9 @@ class RecordAddon extends Addon {
 
   /**
    * 期限切れのコンテキストを一括削除します。
-   * @param {string} guildId
    * @returns {Promiose<void>}
    */
-  async #clean(guildId) {
+  async #clean() {
     // 対象取得
     const limit = dayjs().tz().subtract(EXPIRES, 'second');
     const contextIds = await this.#redis.zRangeByScore(`${process.env.REDIS_NAMESPACE}:contexts`, 0, limit.valueOf());
