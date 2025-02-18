@@ -362,7 +362,7 @@ class RecordAddon extends Addon {
           // 記録終了し、要約を自動生成する
           if (
             oldEvent.status === GuildScheduledEventStatus.Active &&
-            newEvent.status === GuildScheduledEventStatus.Completed
+            newEvent.status !== GuildScheduledEventStatus.Active
           ) {
             console.info(`[${this.constructor.name}] スケジュールイベント <${newEvent.channel.name}> ${newEvent.name} が終了しました。`);
 
