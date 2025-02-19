@@ -333,6 +333,7 @@ class RecordAddon extends Addon {
 
             events.forEach(event => console.info(`[${this.constructor.name}] Botが 記録スケジュールイベント <${event.channel.name}> ${event.name} を終了します。`));
             await Promise.allSettled(events.map(event => event.setStatus(GuildScheduledEventStatus.Completed)));
+            return;
           }
         },
       },
@@ -340,16 +341,16 @@ class RecordAddon extends Addon {
       // スケジュールイベントの開始と終了に合わせて記録を開始・終了する
       {
         name: 'guildScheduledEventUpdate',
-        handler: async (/** @type {GuildScheduledEvent} */ oldEvent, /** @type {GuildScheduledEvent} */ newEvent) => {
-          const guild = oldEvent.guild;
-          if (!this.isHandle(guild) || !this.isPrimary || !oldEvent.description.startsWith('@record')) {
+        handler: async (/** @type {GuildScheduledEvent?} */ oldEvent, /** @type {GuildScheduledEvent?} */ newEvent) => {
+          const guild = oldEvent?.guild;
+          if (!this.isHandle(guild) || !this.isPrimary || !oldEvent?.description?.startsWith('@record')) {
             return;
           }
 
           // 記録開始
           if (
-            oldEvent.status === GuildScheduledEventStatus.Scheduled &&
-            newEvent.status === GuildScheduledEventStatus.Active
+            oldEvent?.status === GuildScheduledEventStatus.Scheduled &&
+            newEvent?.status === GuildScheduledEventStatus.Active
           ) {
             console.info(`[${this.constructor.name}] スケジュールイベント <${newEvent.channel.name}> ${newEvent.name} が開始しました。`);
             try {
@@ -361,8 +362,8 @@ class RecordAddon extends Addon {
 
           // 記録終了し、要約を自動生成する
           if (
-            oldEvent.status === GuildScheduledEventStatus.Active &&
-            newEvent.status !== GuildScheduledEventStatus.Active
+            oldEvent?.status === GuildScheduledEventStatus.Active &&
+            newEvent?.status !== GuildScheduledEventStatus.Active
           ) {
             console.info(`[${this.constructor.name}] スケジュールイベント <${oldEvent.channel.name}> ${oldEvent.name} が終了しました。`);
 
