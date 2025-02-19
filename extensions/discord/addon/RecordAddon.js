@@ -342,7 +342,7 @@ class RecordAddon extends Addon {
         name: 'guildScheduledEventUpdate',
         handler: async (/** @type {GuildScheduledEvent} */ oldEvent, /** @type {GuildScheduledEvent} */ newEvent) => {
           const guild = oldEvent.guild;
-          if (!this.isHandle(guild) || !this.isPrimary || !newEvent.description.startsWith('@record')) {
+          if (!this.isHandle(guild) || !this.isPrimary || !oldEvent.description.startsWith('@record')) {
             return;
           }
 
@@ -364,13 +364,13 @@ class RecordAddon extends Addon {
             oldEvent.status === GuildScheduledEventStatus.Active &&
             newEvent.status !== GuildScheduledEventStatus.Active
           ) {
-            console.info(`[${this.constructor.name}] スケジュールイベント <${newEvent.channel.name}> ${newEvent.name} が終了しました。`);
+            console.info(`[${this.constructor.name}] スケジュールイベント <${oldEvent.channel.name}> ${oldEvent.name} が終了しました。`);
 
             // 要約パラメーター
-            const start = dayjs(newEvent.scheduledStartAt).tz();
+            const start = dayjs(oldEvent.scheduledStartAt).tz();
             const end = dayjs().tz();
             const timeSpan = end.diff(start, 'second');
-            const type = newEvent.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
+            const type = oldEvent.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
             const defaultChannelId = this.#getSetting(guild.id, 'defaultChannelId');
 
             console.info(`[${this.constructor.name}] 記録時間: ${start.format('HH:mm')}-${end.format('HH:mm')} (${timeSpan}秒)`);
@@ -389,7 +389,7 @@ class RecordAddon extends Addon {
             console.info(`[${this.constructor.name}] ${delay}秒後に要約します。`);
             await setTimeout(delay * 1000);
 
-            const summary = await this.#summarize(newEvent.channel, start, end, type);
+            const summary = await this.#summarize(oldEvent.channel, start, end, type);
             if (!summary) {
               console.info(`[${this.constructor.name}] 該当期間の記録データがありません。`);
               return;
