@@ -9,6 +9,7 @@ module.exports = {
       guildId: '111111111111111111',
       defaultChannelId: '111111111111111111',
       defaultSummaryType: 'official',
+      autoSummarizeAbortDuration: 30 * 60,
       autoSummarizeDelayTime: 30,
       autoSummarizeMinDuration: 600,
       captureTimeout: 1,
