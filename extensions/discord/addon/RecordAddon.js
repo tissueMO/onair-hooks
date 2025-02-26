@@ -366,7 +366,12 @@ class RecordAddon extends Addon {
         name: 'guildScheduledEventUpdate',
         handler: async (/** @type {GuildScheduledEvent?} */ oldEvent, /** @type {GuildScheduledEvent?} */ newEvent) => {
           const guild = oldEvent?.guild;
-          if (!this.isHandle(guild) || !this.isPrimary || !oldEvent?.description?.startsWith('@record')) {
+          if (
+            !this.isHandle(guild) ||
+            !this.isPrimary ||
+            !oldEvent?.description?.startsWith('@record') ||
+            (oldEvent?.scheduledStartAt !== newEvent?.scheduledStartAt)
+          ) {
             return;
           }
 
@@ -376,8 +381,6 @@ class RecordAddon extends Addon {
             newEvent?.status === GuildScheduledEventStatus.Active
           ) {
             console.info(`[${this.constructor.name}] スケジュールイベント <${newEvent.channel.name}> ${newEvent.name} が開始しました。`);
-            console.log(`[${this.constructor.name}] スケジュールイベント開始/変更前:`, oldEvent?.status, oldEvent?.channel, oldEvent?.scheduledStartAt, oldEvent?.creatorId, oldEvent?.description);
-            console.log(`[${this.constructor.name}] スケジュールイベント開始/変更後:`, newEvent?.status, newEvent?.channel, newEvent?.scheduledStartAt, newEvent?.creatorId, newEvent?.description);
 
             try {
               await this.#startRecord(guild, newEvent.channel);
@@ -392,8 +395,6 @@ class RecordAddon extends Addon {
             newEvent?.status !== GuildScheduledEventStatus.Active
           ) {
             console.info(`[${this.constructor.name}] スケジュールイベント <${oldEvent.channel.name}> ${oldEvent.name} が終了しました。`);
-            console.log(`[${this.constructor.name}] スケジュールイベント終了/変更前:`, oldEvent?.status, oldEvent?.channel, oldEvent?.scheduledStartAt, oldEvent?.creatorId, oldEvent?.description);
-            console.log(`[${this.constructor.name}] スケジュールイベント終了/変更後:`, newEvent?.status, newEvent?.channel, newEvent?.scheduledStartAt, newEvent?.creatorId, newEvent?.description);
 
             try {
               await this.#endRecord(guild, oldEvent.channel);
