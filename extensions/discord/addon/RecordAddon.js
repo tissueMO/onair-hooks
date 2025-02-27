@@ -32,7 +32,7 @@ class RecordAddon extends Addon {
   static #clients;
 
   /**
-   * @type {Object}
+   * @type {Object<string, VoiceConnection>}
    */
   static #connections;
 
@@ -291,7 +291,7 @@ class RecordAddon extends Addon {
    */
   get events() {
     return [
-      // ボイスチャンネルの入退出に連動してスケジュールイベントを開始・終了させる
+      // スケジュールイベントに関連付けられたボイスチャンネルの入退出に連動してBotを参加・退出させる
       // ※ユーザーが作成したイベントを操作するにはイベントの管理権限が必要
       {
         name: 'voiceStateUpdate',
@@ -304,135 +304,104 @@ class RecordAddon extends Addon {
           const userId = newState.id;
           const botId = this.client.user.id;
 
-          // Botが退出したらボイスチャンネルの接続を破棄
-          if (userId === botId && oldState.channelId !== null && newState.channelId === null) {
-            RecordAddon.#connections[botId]?.destroy();
-            delete RecordAddon.#connections[botId];
+          // Botが参加したらスケジュールイベントを開始
+          if (userId === botId && oldState.channelId === null && newState.channelId !== null) {
+            const event = await this.#fetchScheduledEvents(guild)
+              .then(events => events.find(e =>
+                e.channel.id === newState.channelId &&
+                e.status === GuildScheduledEventStatus.Scheduled
+              ));
+
+            if (event) {
+              console.info(`[${this.constructor.name}] スケジュールイベント <${event.channel.name}> ${event.name} を開始します。`);
+              await event.setStatus(GuildScheduledEventStatus.Active);
+            }
           }
 
-          if (this.isPrimary) {
-            // 対象イベントを特定
-            const events = [...(
-              await guild.scheduledEvents.fetch()
-                .then(events => events
-                  .filter(event =>
-                    event.description.startsWith('@record') &&
-                    (
-                      (event.status === GuildScheduledEventStatus.Active) ||
-                      (
-                        0 <= dayjs().diff(dayjs(event.scheduledStartAt), 'second') &&
-                        dayjs().diff(dayjs(event.scheduledStartAt), 'second') <= this.#getSetting(guild.id, 'autoSummarizeAbortDuration')
-                      )
-                    )
-                  )
-                  .values()
-                )
-            )];
+          // Botが退出したらスケジュールイベントを終了して自動要約する
+          if (userId === botId && oldState.channelId !== null && newState.channelId === null) {
+            const event = await this.#fetchScheduledEvents(guild)
+              .then(events => events.find(e =>
+                e.channel.id === oldState.channelId &&
+                e.status === GuildScheduledEventStatus.Active
+              ));
 
-            // スケジュールイベントのチャンネルごとに処理
+            if (event) {
+              // 要約パラメーター
+              const start = dayjs(event.scheduledStartAt).tz();
+              const end = dayjs().tz();
+              const timeSpan = end.diff(start, 'second');
+              const type = event.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
+              const defaultChannelId = this.#getSetting(guild.id, 'defaultChannelId');
+              console.info(`[${this.constructor.name}] 記録時間: ${start.format('HH:mm')}-${end.format('HH:mm')} (${timeSpan}秒)`);
+
+              // スケジュールイベント終了
+              console.info(`[${this.constructor.name}] スケジュールイベント <${event.channel.name}> ${event.name} を終了します。`);
+              await event.setStatus(GuildScheduledEventStatus.Completed);
+
+              // コネクション破棄
+              RecordAddon.#connections[botId]?.destroy();
+              delete RecordAddon.#connections[botId];
+
+              // 要約してデフォルトチャンネルへ送信
+              if (!defaultChannelId) {
+                console.info(`[${this.constructor.name}] 自動要約を行いません。`);
+
+              } else if (timeSpan < this.#getSetting(guild.id, 'autoSummarizeMinDuration')) {
+                console.info(`[${this.constructor.name}] 記録時間が短すぎるため自動要約をスキップします。`);
+
+              } else {
+                const delay = this.#getSetting(guild.id, 'autoSummarizeDelayTime');
+                console.info(`[${this.constructor.name}] ${delay}秒後に要約します。`);
+                await setTimeout(delay * 1000);
+
+                const summary = await this.#summarize(event.channel, start, end, type);
+                if (!summary) {
+                  console.info(`[${this.constructor.name}] 該当期間の記録データがありません。`);
+                } else {
+                  await this.client.channels.cache.get(defaultChannelId).send(summary);
+                }
+              }
+            }
+          }
+
+          // スケジュールイベントの時間に合わせてBotを参加・退出させる
+          if (this.isPrimary && oldState.channelId !== newState.channelId && userId !== botId) {
+            const events = await this.#fetchScheduledEvents(guild);
+
             for (const event of events) {
               const channel = event.channel;
               const members = channel.members.filter(member => !member.user.bot);
+              const hasBot = channel.members.some(member => member.user.bot);
 
-              // 誰かが入ってきたらスケジュールイベントを開始させる
+              // 誰かが入ってきたらBot参加
               if (
                 newState.channelId === channel.id &&
-                oldState.channelId !== newState.channelId &&
                 event.status === GuildScheduledEventStatus.Scheduled &&
+                !hasBot &&
                 members.size > 0
               ) {
-                console.info(`[${this.constructor.name}] スケジュールイベント <${channel.name}> ${event.name} を開始します。`);
-                await event.setStatus(GuildScheduledEventStatus.Active);
+                try {
+                  await this.#startRecord(guild, channel);
+                } catch (err) {
+                  console.warn(`[${this.constructor.name}] スケジュールイベントBot参加失敗: ${err}`);
+                }
               }
 
-              // 誰もいなくなったらスケジュールイベントを終了させる
+              // 誰もいなくなったらBot退出
               if (
                 oldState.channelId === channel.id &&
-                oldState.channelId !== newState.channelId &&
                 event.status === GuildScheduledEventStatus.Active &&
+                hasBot &&
                 members.size === 0
               ) {
-                console.info(`[${this.constructor.name}] スケジュールイベント <${channel.name}> ${event.name} を終了します。`);
-                await event.setStatus(GuildScheduledEventStatus.Completed);
+                try {
+                  await this.#endRecord(guild, channel);
+                } catch (err) {
+                  console.warn(`[${this.constructor.name}] スケジュールイベントBot退出失敗: ${err}`);
+                }
               }
             }
-          }
-        },
-      },
-
-      // スケジュールイベントの開始と終了に連動してBotを参加・退出させる
-      // スケジュールイベント終了時に自動で要約する
-      {
-        name: 'guildScheduledEventUpdate',
-        handler: async (/** @type {GuildScheduledEvent?} */ oldEvent, /** @type {GuildScheduledEvent?} */ newEvent) => {
-          const guild = oldEvent?.guild;
-          if (
-            !this.isHandle(guild) ||
-            !this.isPrimary ||
-            !oldEvent?.description?.startsWith('@record') ||
-            (oldEvent?.scheduledStartAt !== newEvent?.scheduledStartAt)
-          ) {
-            return;
-          }
-
-          // Botを参加させて記録を開始する
-          if (
-            oldEvent?.status === GuildScheduledEventStatus.Scheduled &&
-            newEvent?.status === GuildScheduledEventStatus.Active
-          ) {
-            console.info(`[${this.constructor.name}] スケジュールイベント <${newEvent.channel.name}> ${newEvent.name} が開始しました。`);
-
-            try {
-              await this.#startRecord(guild, newEvent.channel);
-            } catch (err) {
-              console.warn(`[${this.constructor.name}] スケジュールイベント参加失敗: ${err}`);
-            }
-          }
-
-          // Botを退出させて記録を終了し、要約を自動生成する
-          if (
-            oldEvent?.status === GuildScheduledEventStatus.Active &&
-            newEvent?.status !== GuildScheduledEventStatus.Active
-          ) {
-            console.info(`[${this.constructor.name}] スケジュールイベント <${oldEvent.channel.name}> ${oldEvent.name} が終了しました。`);
-
-            try {
-              await this.#endRecord(guild, oldEvent.channel);
-            } catch (err) {
-              console.warn(`[${this.constructor.name}] スケジュールイベント退出失敗: ${err}`);
-            }
-
-            // 要約パラメーター
-            const start = dayjs(oldEvent.scheduledStartAt).tz();
-            const end = dayjs().tz();
-            const timeSpan = end.diff(start, 'second');
-            const type = oldEvent.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
-            const defaultChannelId = this.#getSetting(guild.id, 'defaultChannelId');
-
-            console.info(`[${this.constructor.name}] 記録時間: ${start.format('HH:mm')}-${end.format('HH:mm')} (${timeSpan}秒)`);
-
-            if (!defaultChannelId) {
-              console.info(`[${this.constructor.name}] 自動要約を行いません。`);
-              return;
-            }
-            if (timeSpan < this.#getSetting(guild.id, 'autoSummarizeMinDuration')) {
-              console.info(`[${this.constructor.name}] 記録時間が短すぎるため自動要約をスキップします。`);
-              return;
-            }
-
-            // 要約実行
-            const delay = this.#getSetting(guild.id, 'autoSummarizeDelayTime');
-            console.info(`[${this.constructor.name}] ${delay}秒後に要約します。`);
-            await setTimeout(delay * 1000);
-
-            const summary = await this.#summarize(oldEvent.channel, start, end, type);
-            if (!summary) {
-              console.info(`[${this.constructor.name}] 該当期間の記録データがありません。`);
-              return;
-            }
-
-            // デフォルトチャンネルに送信
-            await this.client.channels.cache.get(defaultChannelId).send(summary);
           }
         },
       },
@@ -784,6 +753,30 @@ class RecordAddon extends Addon {
     return await this.#redis.mGet(contextIds.map(id => `${process.env.REDIS_NAMESPACE}:context:${id}`))
       .then(contexts => contexts.map(context => context ? JSON.parse(context) : null))
       .then(contexts => contexts.filter(context => context?.channelId === channel.id))
+  }
+
+  /**
+   * Botに関連するスケジュールイベントを取得します。
+   * @param {Guild} guild
+   * @returns {Promise<GuildScheduledEvent[]>}
+   */
+  async #fetchScheduledEvents(guild) {
+    return [...(
+      await guild.scheduledEvents.fetch()
+        .then(events => events
+          .filter(event =>
+            event.description.startsWith('@record') &&
+            (
+              (event.status === GuildScheduledEventStatus.Active) ||
+              (
+                0 <= dayjs().diff(dayjs(event.scheduledStartAt), 'second') &&
+                dayjs().diff(dayjs(event.scheduledStartAt), 'second') <= this.#getSetting(guild.id, 'autoSummarizeAbortDuration')
+              )
+            )
+          )
+          .values()
+        )
+    )];
   }
 
   /**
