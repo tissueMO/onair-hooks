@@ -32,17 +32,18 @@ class HookAddon extends Addon {
           const state = this.#getChangedStateText(oldState, newState);
 
           if (state) {
-            console.info(`[${this.constructor.name}] <${guildName}:${username}> ミーティングデバイス ${state}`);
-
             const requests = this.settings[guild.id]
               .filter(h => h.userId === userId && h.state === state)
               .map(({ hook: { url, method, headers, data } }) => axios.request({ url, method, headers, data }));
 
             const results = await Promise.allSettled(requests);
 
-            const successCount = results.filter(r => r.status === 'fulfilled').length;
-            const failureCount = results.filter(r => r.status === 'rejected').length;
-            console.info(`[${this.constructor.name}] <${guildName}:${username}> ${results.length}件のフック処理が実行されました。(成功=${successCount}, 失敗=${failureCount})`);
+            if (results.length > 0) {
+              const successCount = results.filter(r => r.status === 'fulfilled').length;
+              const failureCount = results.filter(r => r.status === 'rejected').length;
+              console.info(`[${this.constructor.name}] <${guildName}:${username}> ミーティングデバイス ${state}`);
+              console.info(`[${this.constructor.name}] <${guildName}:${username}> ${results.length}件のフック処理が実行されました。(成功=${successCount}, 失敗=${failureCount})`);
+            }
           }
         },
       },
