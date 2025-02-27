@@ -323,7 +323,7 @@ class RecordAddon extends Addon {
             // コネクション破棄
             RecordAddon.#connections[botId]?.destroy();
             delete RecordAddon.#connections[botId];
-            console.info(`[${this.constructor.name}] Botが <${channel.name}> のコネクションを破棄しました。`);
+            console.info(`[${this.constructor.name}] Botがコネクションを破棄しました。`);
 
             const event = await this.#fetchScheduledEvents(guild)
               .then(events => events.find(e =>
