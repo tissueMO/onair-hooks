@@ -320,6 +320,11 @@ class RecordAddon extends Addon {
 
           // Botが退出したらスケジュールイベントを終了して自動要約する
           if (userId === botId && oldState.channelId !== null && newState.channelId === null) {
+            // コネクション破棄
+            RecordAddon.#connections[botId]?.destroy();
+            delete RecordAddon.#connections[botId];
+            console.info(`[${this.constructor.name}] Botが <${channel.name}> のコネクションを破棄しました。`);
+
             const event = await this.#fetchScheduledEvents(guild)
               .then(events => events.find(e =>
                 e.channel.id === oldState.channelId &&
@@ -338,10 +343,6 @@ class RecordAddon extends Addon {
               // スケジュールイベント終了
               console.info(`[${this.constructor.name}] スケジュールイベント <${event.channel.name}> ${event.name} を終了します。`);
               await event.setStatus(GuildScheduledEventStatus.Completed);
-
-              // コネクション破棄
-              RecordAddon.#connections[botId]?.destroy();
-              delete RecordAddon.#connections[botId];
 
               // 要約してデフォルトチャンネルへ送信
               if (!defaultChannelId) {
