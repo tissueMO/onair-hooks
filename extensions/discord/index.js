@@ -24,7 +24,7 @@ const clients = [process.env.DISCORD_TOKEN_1, process.env.DISCORD_TOKEN_2]
     client.login(token);
 
     client.once('ready', async () => {
-      const guildIds = client.guilds.cache.keys();
+      const guildIds = [...client.guilds.cache.keys()];
       for (const guildId of guildIds) {
         console.info(`Bot#${index}は <${client.user.tag}@${client.guilds.cache.get(guildId).name}> でログインしました。`);
       }
