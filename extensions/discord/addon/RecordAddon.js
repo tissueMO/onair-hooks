@@ -356,6 +356,7 @@ class RecordAddon extends Addon {
             console.info(`[${this.constructor.name}] Botがコネクションを破棄しました。`);
 
             // 要約パラメーター
+            const channel = oldState.channel;
             const start = connectionContext.start;
             const end = dayjs().tz();
             const timeSpan = end.diff(start, 'second');
@@ -377,7 +378,7 @@ class RecordAddon extends Addon {
             console.info(`[${this.constructor.name}] ${delay}秒後に要約します。`);
             await setTimeout(delay * 1000);
 
-            const summary = await this.#summarize(oldState.channel, start, end, type);
+            const summary = await this.#summarize(channel, start, end, type);
             if (!summary) {
               console.info(`[${this.constructor.name}] 該当期間の記録データがありません。`);
               return;
