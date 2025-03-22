@@ -2,7 +2,6 @@ version: '3'
 volumes:
   redis-data:
   redis-insight-data:
-  open-webui-data:
 services:
   app:
     build: .
@@ -30,13 +29,3 @@ services:
       - 5540:5540
     volumes:
       - redis-insight-data:/data
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:main
-    ports:
-      - 4040:8080
-    security_opt:
-      - seccomp:unconfined
-    volumes:
-      - open-webui-data:/app/backend/data
-    environment:
-      WEBUI_AUTH: 'False'

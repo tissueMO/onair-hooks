@@ -606,20 +606,10 @@ class RecordAddon extends Addon {
    * @returns {Promise<string|null>}
    */
   async #summarize(channel, start, end, type) {
-    const apiOptions = {
-      headers: {
-        Authorization: `Bearer ${process.env.OPEN_WEBUI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    };
-
-    // 要約タイプからモデル名を解決
-    const modelId = `summarize-${type}`;
-    const modelIds = await axios.get(`${process.env.OPEN_WEBUI_HOST}/api/models`, apiOptions)
-      .then(({ data }) => data.data.map(model => model.id));
-
-    if (!modelIds.includes(modelId)) {
-      console.warn(`[${this.constructor.name}] タイプ <${type}> に対応するモデルがありません。`);
+    // 要約タイプに応じた設定を取得
+    const summaryOptions = this.#getSetting(channel.guildId, 'summaryTypes')[type] ?? null;
+    if (!summaryOptions) {
+      console.warn(`[${this.constructor.name}] タイプ <${type}> に対応する設定がありません。`);
       return '(要約できませんでした: タイプが誤っています)';
     }
 
@@ -631,10 +621,27 @@ class RecordAddon extends Addon {
 
     // 要約生成
     console.info(`[${this.constructor.name}] タイプ <${type}> で要約します...`);
-    const { data } = await axios.post(`${process.env.OPEN_WEBUI_HOST}/api/chat/completions`, {
-      model: modelId,
-      messages: [{ role: 'user', content: transcription }],
-    }, apiOptions);
+    const { data } = await axios.post(`${process.env.OPENAI_API_HOST}/v1/chat/completions`,
+      {
+        model: summaryOptions.model ?? 'gpt-4o',
+        messages: [
+          {
+            role: 'developer',
+            content: summaryOptions.prompt ?? 'ユーザーから渡される文字起こしされた会話を要約してください。',
+          },
+          {
+            role: 'user',
+            content: transcription,
+          },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     console.log(`[${this.constructor.name}] OpenAIトークン消費 <${type}>:`, data.usage);
 
@@ -786,6 +793,7 @@ class RecordAddon extends Addon {
       speakSpeed: 0.9,
       speakModel: 'tts-1',
       speakVoice: 'nova',
+      summaryTypes: {},
     };
 
     return settings[key] ?? defaultSettings[key];

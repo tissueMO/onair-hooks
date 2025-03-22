@@ -14,6 +14,16 @@ module.exports = {
       autoSummarizeMinDuration: 600,
       captureTimeout: 1,
       captureMinDuration: 3,
+      summaryTypes: {
+        casual: {
+          model: 'gpt-4o',
+          prompt: 'カジュアルに要約してください。',
+        },
+        official: {
+          model: 'gpt-4o',
+          prompt: '議事録として要約してください。',
+        },
+      },
     },
   ],
   hooks: [
