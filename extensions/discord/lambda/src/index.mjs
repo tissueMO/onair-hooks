@@ -73,7 +73,7 @@ export async function transcribe(event) {
   try {
     const requestData = createFormData({
       file: createReadStream(srcPath),
-      model: 'whisper-1',
+      model: process.env.TRANSCRIBE_MODEL,
       language: 'ja',
     });
 

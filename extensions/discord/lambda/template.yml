@@ -94,6 +94,7 @@ Resources:
           OPENAI_API_HOST: !Ref OpenAiApiHost
           OPENAI_API_KEY: !Ref OpenAiApiKey
           REDIS_HOST: !Ref RedisHost
+          TRANSCRIBE_MODEL: 'gpt-4o-mini-transcribe'
       Policies:
         - S3CrudPolicy:
             BucketName: onair-hooks
