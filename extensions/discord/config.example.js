@@ -14,6 +14,7 @@ module.exports = {
       autoSummarizeMinDuration: 600,
       captureTimeout: 1,
       captureMinDuration: 3,
+      speakPrompt: '日本語の標準語を話します。',
       summaryTypes: {
         casual: {
           model: 'gpt-4o',

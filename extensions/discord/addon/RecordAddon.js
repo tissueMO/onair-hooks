@@ -692,6 +692,7 @@ class RecordAddon extends Addon {
         model: this.#getSetting(guild.id, 'speakModel'),
         voice: this.#getSetting(guild.id, 'speakVoice'),
         speed: this.#getSetting(guild.id, 'speakSpeed'),
+        instructions: this.#getSetting(guild.id, 'speakPrompt'),
         input: text,
         respose_format: 'mp3',
       },
@@ -790,9 +791,10 @@ class RecordAddon extends Addon {
       autoSummarizeMinDuration: 10 * 60,
       captureTimeout: 1,
       captureMinDuration: 3,
-      speakSpeed: 0.9,
-      speakModel: 'tts-1',
+      speakSpeed: 1.0,
+      speakModel: 'gpt-4o-mini-tts',
       speakVoice: 'nova',
+      speakPrompt: '',
       summaryTypes: {},
     };
 
