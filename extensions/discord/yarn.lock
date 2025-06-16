@@ -675,16 +675,16 @@
   resolved "https://registry.yarnpkg.com/@discordjs/util/-/util-1.1.0.tgz#dcffd2b61aab8eadd66bea67811bc34fc769bb2a"
   integrity sha512-IndcI5hzlNZ7GS96RV3Xw1R2kaDuXEp7tRIy/KlhidpN/BQ1qh1NZt3377dMLTa44xDUNKT7hnXkA/oUAzD/lg==
 
-"@discordjs/voice@^0.17.0":
-  version "0.17.0"
-  resolved "https://registry.yarnpkg.com/@discordjs/voice/-/voice-0.17.0.tgz#37be97c20dc4144c4c4d27d8ad02f29373da7ea6"
-  integrity sha512-hArn9FF5ZYi1IkxdJEVnJi+OxlwLV0NJYWpKXsmNOojtGtAZHxmsELA+MZlu2KW1F/K1/nt7lFOfcMXNYweq9w==
+"@discordjs/voice@^0.18.0":
+  version "0.18.0"
+  resolved "https://registry.yarnpkg.com/@discordjs/voice/-/voice-0.18.0.tgz#8fb1f1c46fb19a26bdff7d7c4e609b25cb46b1ba"
+  integrity sha512-BvX6+VJE5/vhD9azV9vrZEt9hL1G+GlOdsQaVl5iv9n87fkXjf3cSwllhR3GdaUC8m6dqT8umXIWtn3yCu4afg==
   dependencies:
-    "@types/ws" "^8.5.10"
-    discord-api-types "0.37.83"
+    "@types/ws" "^8.5.12"
+    discord-api-types "^0.37.103"
     prism-media "^1.3.5"
-    tslib "^2.6.2"
-    ws "^8.16.0"
+    tslib "^2.6.3"
+    ws "^8.18.0"
 
 "@discordjs/ws@^1.1.1":
   version "1.1.1"
@@ -1260,14 +1260,16 @@
   integrity sha512-TifLZlFudklWlMBfhubvgqTXRzLDI5pCbGa4P8a3wPyUQSW+1xQ5eDsreP9DWHX3tjq1ke96uYG/nwundroWcA==
 
 "@types/node@*":
-  version "17.0.35"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-17.0.35.tgz#635b7586086d51fb40de0a2ec9d1014a5283ba4a"
-  integrity sha512-vu1SrqBjbbZ3J6vwY17jBs8Sr/BKA+/a/WtjRG+whKg1iuLFOosq872EXS0eXWILdO36DHQQeku/ZcL6hz2fpg==
+  version "24.0.3"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.0.3.tgz#f935910f3eece3a3a2f8be86b96ba833dc286cab"
+  integrity sha512-R4I/kzCYAdRLzfiCabn9hxWfbuHS573x+r0dJMkkzThEa7pbrcDWK+9zu3e7aBOouf+rQAciqPFMnxwr0aWgKg==
+  dependencies:
+    undici-types "~7.8.0"
 
-"@types/ws@^8.5.10":
-  version "8.5.10"
-  resolved "https://registry.yarnpkg.com/@types/ws/-/ws-8.5.10.tgz#4acfb517970853fa6574a3a6886791d04a396787"
-  integrity sha512-vmQSUcfalpIq0R9q7uTo2lXs6eGIpt9wtnLdMv9LVpIjCA/+ufZRozlVoVelIYixx1ugCBKDhn89vnsEGOCx9A==
+"@types/ws@^8.5.10", "@types/ws@^8.5.12":
+  version "8.18.1"
+  resolved "https://registry.yarnpkg.com/@types/ws/-/ws-8.18.1.tgz#48464e4bf2ddfd17db13d845467f6070ffea4aa9"
+  integrity sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==
   dependencies:
     "@types/node" "*"
 
@@ -1328,6 +1330,45 @@ balanced-match@^1.0.0:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/balanced-match/-/balanced-match-1.0.2.tgz#e83e3a7e3f300b34cb9d87f615fa0cbf357690ee"
   integrity sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==
+
+bare-addon-resolve@^1.3.0:
+  version "1.9.4"
+  resolved "https://registry.yarnpkg.com/bare-addon-resolve/-/bare-addon-resolve-1.9.4.tgz#50ad7b26de493f978f09bbbbe987219c4ecbfd28"
+  integrity sha512-unn6Vy/Yke6F99vg/7tcrvM2KUvIhTNniaSqDbam4AWkd4NhvDVSrQiRYVlNzUV2P7SPobkCK7JFVxrJk9btCg==
+  dependencies:
+    bare-module-resolve "^1.10.0"
+    bare-semver "^1.0.0"
+
+bare-module-resolve@^1.10.0:
+  version "1.11.1"
+  resolved "https://registry.yarnpkg.com/bare-module-resolve/-/bare-module-resolve-1.11.1.tgz#4ea4d1dd82947a00b4f4bbbfce2379eedd9c9e09"
+  integrity sha512-DCxeT9i8sTs3vUMA3w321OX/oXtNEu5EjObQOnTmCdNp5RXHBAvAaBDHvAi9ta0q/948QPz+co6SsGi6aQMYRg==
+  dependencies:
+    bare-semver "^1.0.0"
+
+bare-os@^3.0.1:
+  version "3.6.1"
+  resolved "https://registry.yarnpkg.com/bare-os/-/bare-os-3.6.1.tgz#9921f6f59edbe81afa9f56910658422c0f4858d4"
+  integrity sha512-uaIjxokhFidJP+bmmvKSgiMzj2sV5GPHaZVAIktcxcpCyBFFWO+YlikVAdhmUo2vYFvFhOXIAlldqV29L8126g==
+
+bare-path@^3.0.0:
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/bare-path/-/bare-path-3.0.0.tgz#b59d18130ba52a6af9276db3e96a2e3d3ea52178"
+  integrity sha512-tyfW2cQcB5NN8Saijrhqn0Zh7AnFNsnczRcuWODH0eYAXBsJ5gVxAUuNr7tsHSC6IZ77cA0SitzT+s47kot8Mw==
+  dependencies:
+    bare-os "^3.0.1"
+
+bare-semver@^1.0.0:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/bare-semver/-/bare-semver-1.0.1.tgz#4737d660785f07cb723cefa6b022089e59120a61"
+  integrity sha512-UtggzHLiTrmFOC/ogQ+Hy7VfoKoIwrP1UFcYtTxoCUdLtsIErT8+SWtOC2DH/snT9h+xDrcBEPcwKei1mzemgg==
+
+bare-url@^2.1.0:
+  version "2.1.6"
+  resolved "https://registry.yarnpkg.com/bare-url/-/bare-url-2.1.6.tgz#86937c11c29b094c821459d3041b7fa67322266e"
+  integrity sha512-FgjDeR+/yDH34By4I0qB5NxAoWv7dOTYcOXwn73kr+c93HyC2lU6tnjifqUe33LKMJcDyCYPQjEAqgOQiXkE2Q==
+  dependencies:
+    bare-path "^3.0.0"
 
 bowser@^2.11.0:
   version "2.11.0"
@@ -1413,6 +1454,11 @@ discord-api-types@0.37.83:
   version "0.37.83"
   resolved "https://registry.yarnpkg.com/discord-api-types/-/discord-api-types-0.37.83.tgz#a22a799729ceded8176ea747157837ddf4708b1f"
   integrity sha512-urGGYeWtWNYMKnYlZnOnDHm8fVRffQs3U0SpE8RHeiuLKb/u92APS8HoQnPTFbnXmY1vVnXjXO4dOxcAn3J+DA==
+
+discord-api-types@^0.37.103:
+  version "0.37.120"
+  resolved "https://registry.yarnpkg.com/discord-api-types/-/discord-api-types-0.37.120.tgz#ad7209930509c4cee3efddbacc77a1b18cf66d34"
+  integrity sha512-7xpNK0EiWjjDFp2nAhHXezE4OUWm7s1zhc/UXXN6hnFFU8dfoPHgV0Hx0RPiCa3ILRpdeh152icc68DGCyXYIw==
 
 discord.js@^14:
   version "14.15.3"
@@ -1720,6 +1766,14 @@ redis@^4.7.0:
     "@redis/search" "1.2.0"
     "@redis/time-series" "1.1.0"
 
+require-addon@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/require-addon/-/require-addon-1.1.0.tgz#0a1ef0ba98b186a3aa304a1abda5208902e63e17"
+  integrity sha512-KbXAD5q2+v1GJnkzd8zzbOxchTkStSyJZ9QwoCq3QwEXAaIlG3wDYRZGzVD357jmwaGY7hr5VaoEAL0BkF0Kvg==
+  dependencies:
+    bare-addon-resolve "^1.3.0"
+    bare-url "^2.1.0"
+
 rimraf@^3.0.2:
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/rimraf/-/rimraf-3.0.2.tgz#f1a5402ba6220ad52cc1282bac1ae3aa49fd061a"
@@ -1751,6 +1805,14 @@ signal-exit@^3.0.0:
   version "3.0.7"
   resolved "https://registry.yarnpkg.com/signal-exit/-/signal-exit-3.0.7.tgz#a9a1767f8af84155114eaabd73f99273c8f59ad9"
   integrity sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==
+
+sodium-native@^5.0.6:
+  version "5.0.6"
+  resolved "https://registry.yarnpkg.com/sodium-native/-/sodium-native-5.0.6.tgz#f2b47e259d91835998f8d54a723d6a784361edde"
+  integrity sha512-lKSVfjJ867gb3LrnOZ0nuVxZ19//k/YhhYKVWQg4fklZ85YKtDHTxmEuWuk/s62IoiDbKC/DV50pcSd9tgaVew==
+  dependencies:
+    require-addon "^1.1.0"
+    which-runtime "^1.2.1"
 
 "string-width@^1.0.2 || 2 || 3 || 4", string-width@^4.2.3:
   version "4.2.3"
@@ -1807,10 +1869,15 @@ tslib@2.6.2:
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.6.2.tgz#703ac29425e7b37cd6fd456e92404d46d1f3e4ae"
   integrity sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==
 
-tslib@^2.6.2:
-  version "2.6.3"
-  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.6.3.tgz#0438f810ad7a9edcde7a241c3d80db693c8cbfe0"
-  integrity sha512-xNvxJEOUiWPGhUuUdQgAJPKOOJfGnIyKySOc09XkKsgdUV/3E2zvwZYdejjmRgPCgcym1juLH3226yA7sEFJKQ==
+tslib@^2.6.2, tslib@^2.6.3:
+  version "2.8.1"
+  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.8.1.tgz#612efe4ed235d567e8aba5f2a5fab70280ade83f"
+  integrity sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==
+
+undici-types@~7.8.0:
+  version "7.8.0"
+  resolved "https://registry.yarnpkg.com/undici-types/-/undici-types-7.8.0.tgz#de00b85b710c54122e44fbfd911f8d70174cd294"
+  integrity sha512-9UJ2xGDvQ43tYyVMpuHlsgApydB8ZKfVYTsLDhXkFL/6gfkp+U8xTGdh8pMJv1SpZna0zxG1DwsKZsreLbXBxw==
 
 undici@6.13.0:
   version "6.13.0"
@@ -1845,6 +1912,11 @@ whatwg-url@^5.0.0:
     tr46 "~0.0.3"
     webidl-conversions "^3.0.0"
 
+which-runtime@^1.2.1:
+  version "1.3.0"
+  resolved "https://registry.yarnpkg.com/which-runtime/-/which-runtime-1.3.0.tgz#d6623cc60b1ab7b423a31acfee594cf5947b68f4"
+  integrity sha512-mQrEBUe15PdEuJvrBlvy3tika6sxQrkblI7JQ9kXeg8Lcby9FwmKvAYrCT3wLh91k6ltost7AVM7qYhjC8N0Zg==
+
 which@^1.1.1:
   version "1.3.1"
   resolved "https://registry.yarnpkg.com/which/-/which-1.3.1.tgz#a45043d54f5805316da8d62f9f50918d3da70b0a"
@@ -1864,10 +1936,10 @@ wrappy@1:
   resolved "https://registry.yarnpkg.com/wrappy/-/wrappy-1.0.2.tgz#b5243d8f3ec1aa35f1364605bc0d1036e30ab69f"
   integrity sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==
 
-ws@^8.16.0:
-  version "8.17.0"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.17.0.tgz#d145d18eca2ed25aaf791a183903f7be5e295fea"
-  integrity sha512-uJq6108EgZMAl20KagGkzCKfMEjxmKvZHG7Tlq0Z6nOky7YF7aq4mOx6xK8TJ/i1LeK4Qus7INktacctDgY8Ow==
+ws@^8.16.0, ws@^8.18.0:
+  version "8.18.2"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.2.tgz#42738b2be57ced85f46154320aabb51ab003705a"
+  integrity sha512-DMricUmwGZUVr++AEAe2uiVM7UoO9MAVZMDu05UQOaUII0lp+zOzLLU4Xqh/JvTqklB1T4uELaaPBKyjE1r4fQ==
 
 yallist@4.0.0, yallist@^4.0.0:
   version "4.0.0"
