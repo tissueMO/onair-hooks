@@ -621,17 +621,20 @@ class RecordAddon extends Addon {
 
     // 要約生成
     console.info(`[${this.constructor.name}] タイプ <${type}> で要約します...`);
-    const { data } = await axios.post(`${process.env.OPENAI_API_HOST}/v1/chat/completions`,
+    const { data } = await axios.post(`${process.env.OPENAI_API_HOST}/v1/responses`,
       {
         model: summaryOptions.model ?? 'gpt-4o',
-        messages: [
-          {
-            role: 'developer',
-            content: summaryOptions.prompt ?? 'ユーザーから渡される文字起こしされた会話を要約してください。',
-          },
+        reasoning: { effort: summaryOptions.reasoning ?? 'none' },
+        instructions: summaryOptions.prompt ?? 'ユーザーから渡される文字起こしされた会話を要約してください。',
+        input: [
           {
             role: 'user',
-            content: transcription,
+            content: [
+              {
+                type: 'input_text',
+                text: transcription,
+              },
+            ],
           },
         ],
       },
@@ -645,7 +648,12 @@ class RecordAddon extends Addon {
 
     console.log(`[${this.constructor.name}] OpenAIトークン消費 <${type}>:`, data.usage);
 
-    if (!data.choices[0]?.message?.content) {
+    const responseText = data.output
+      ?.flatMap((item) => item.content ?? [])
+      ?.slice(-1)
+      ?.[0]?.text;
+
+      if (!responseText) {
       return '(要約できませんでした: 結果を取得できませんでした)';
     }
 
@@ -675,7 +683,8 @@ class RecordAddon extends Addon {
     return [
       headerText,
       `参加者: ${userNames.join('・')}`,
-      data.choices[0].message.content.replace(/\*/g, ''),
+      '',
+      responseText.replace(/\*/g, ''),
     ].join('\n');
   }
 

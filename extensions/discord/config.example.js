@@ -17,11 +17,13 @@ module.exports = {
       speakPrompt: '日本語の標準語を話します。',
       summaryTypes: {
         casual: {
-          model: 'gpt-4o',
+          model: 'gpt-5.1',
+          reasoning: 'low',
           prompt: 'カジュアルに要約してください。',
         },
         official: {
-          model: 'gpt-4o',
+          model: 'gpt-5.1',
+          reasoning: 'low',
           prompt: '議事録として要約してください。',
         },
       },
