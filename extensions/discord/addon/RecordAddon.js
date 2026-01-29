@@ -128,7 +128,7 @@ class RecordAddon extends Addon {
           },
           {
             name: 'type',
-            description: '要約タイプ (official or casual)',
+            description: `要約タイプ (${Object.keys(this.#getSetting(channel.guildId, 'summaryTypes')).join(' or ')})`,
             type: ApplicationCommandOptionType.String,
             minLength: 1,
           },
@@ -322,7 +322,7 @@ class RecordAddon extends Addon {
                 );
 
               if (event) {
-                const type = event.description.match(/@record\((.*)\)/)?.[1] ?? this.#getSetting(guild.id, 'defaultSummaryType');
+                const type = event.description.match(/@record\((.*)\)/)?.[1] ?? null;
                 try {
                   await this.#startRecord(guild, channel, type);
                 } catch (err) {
