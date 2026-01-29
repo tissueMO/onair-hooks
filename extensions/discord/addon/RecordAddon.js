@@ -591,8 +591,9 @@ class RecordAddon extends Addon {
     const today = dayjs().tz().format('YYYY/MM/DD');
     const header = `${today} ${actualStart.format('HH:mm')}-${actualEnd.format('HH:mm')} <${channel.name}> にて:`;
     const lines = contexts
-      .map(context => ({ ...context, transcription: context.transcription?.replace(/\n/g, '。') }))
-      .map(context => `[${dayjs(context.start).tz().format('HH:mm')}] ${context.userShortName}「${context.transcription ?? '(文字起こしできませんでした)'}」`);
+      .filter(context => context?.transcription?.trim())
+      .map(context => ({ ...context, transcription: context.transcription.replace(/\n/g, '。').trim() }))
+      .map(context => `[${dayjs(context.start).tz().format('HH:mm')}] ${context.userShortName}「${context.transcription}」`);
 
     return header + '\n\n' + lines.join('\n');
   }
