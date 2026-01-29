@@ -128,7 +128,7 @@ class RecordAddon extends Addon {
           },
           {
             name: 'type',
-            description: `要約タイプ (${Object.keys(this.#getSetting(channel.guildId, 'summaryTypes')).join(' or ')})`,
+            description: `要約タイプ (${['official', 'casual', 'short'].join(' or ')})`,
             type: ApplicationCommandOptionType.String,
             minLength: 1,
           },
