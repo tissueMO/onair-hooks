@@ -73,7 +73,7 @@ Resources:
                   - Name: prefix
                     Value: records/
                   - Name: suffix
-                    Value: .pcm
+                    Value: .ogg
 
   TranscribeLambdaFunction:
     Type: AWS::Serverless::Function

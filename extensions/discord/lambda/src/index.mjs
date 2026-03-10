@@ -12,7 +12,7 @@ const s3 = new S3Client();
 const EXPIRES = 43200;
 
 /**
- * PCM→MP3形式に変換します。
+ * Ogg→MP3形式に変換します。
  */
 export async function convert(event) {
   const bucket = event.Records[0].s3.bucket.name;
@@ -23,15 +23,15 @@ export async function convert(event) {
   console.info(`ID: ${id} の変換開始...`);
 
   // 対象ファイルパス
-  const srcPath = path.join(`/tmp/${id}.pcm`);
+  const srcPath = path.join(`/tmp/${id}.ogg`);
   const destPath = path.join(`/tmp/${id}.mp3`);
 
-  // (PCM) ダウンロード・削除
+  // (Ogg) ダウンロード・削除
   const { Body: srcData } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   await pipeline(srcData, createWriteStream(srcPath));
 
-  // PCM→MP3 変換
-  await pcmToMp3(srcPath, destPath);
+  // Ogg→MP3 変換
+  await oggToMp3(srcPath, destPath);
 
   // (MP3) アップロード
   await s3.send(new PutObjectCommand({
@@ -126,19 +126,19 @@ function createFormData(data) {
 }
 
 /**
- * PCM形式の音声データをMP3形式に変換します。
+ * Ogg Opus 形式の音声データを MP3 形式に変換します。
+ * ※一部の壊れたフレームは読み飛ばします。
  * @param {string} source
  * @param {string} destination
  * @returns {Promise}
  */
-async function pcmToMp3(source, destination) {
+export async function oggToMp3(source, destination) {
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(source)
       .inputOptions([
-        '-f s16le',
-        '-ar 48k',
-        '-ac 2',
+        '-fflags', '+discardcorrupt',
+        '-err_detect', 'ignore_err',
       ])
       .audioCodec('libmp3lame')
       .audioBitrate('192k')

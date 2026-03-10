@@ -1,11 +1,11 @@
 const { Client, Guild, VoiceChannel, ChannelType, ApplicationCommandOptionType, GuildScheduledEventStatus, VoiceState, CommandInteraction, GuildScheduledEvent } = require('discord.js');
-const { joinVoiceChannel, EndBehaviorType, VoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
+const { joinVoiceChannel, EndBehaviorType, createAudioPlayer, createAudioResource, entersState, VoiceConnectionStatus } = require('@discordjs/voice');
 const Addon = require('./Addon');
+const OggOpusTransform = require('./record/ogg-opus-transform');
 const { createWriteStream, createReadStream } = require('fs');
 const { pipeline } = require('stream/promises');
 const { v4: uuid } = require('uuid');
 const fs = require('fs').promises;
-const prism = require('prism-media');
 const { createRedisClient, parseTime } = require('../common');
 const { RedisClientType } = require('@redis/client');
 const dayjs = require('dayjs');
@@ -21,6 +21,7 @@ dayjs.tz.setDefault('Asia/Tokyo');
 
 const s3 = new S3Client();
 const EXPIRES = 43200;
+const READY_TIMEOUT = 20 * 1000;
 
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
@@ -32,7 +33,7 @@ class RecordAddon extends Addon {
   static #clients;
 
   /**
-   * @type {Object<string, VoiceConnection>}
+   * @type {Object<string, Object>}
    */
   static #connectionContexts;
 
@@ -437,7 +438,7 @@ class RecordAddon extends Addon {
 
     // Botをボイスチャンネルに参加させる
     const botId = targetClient?.user?.id;
-    RecordAddon.#connectionContexts[botId]?.connection?.destroy();
+    await RecordAddon.#connectionContexts[botId]?.connection?.destroy();
 
     const connection = joinVoiceChannel({
       guildId: guild.id,
@@ -447,10 +448,12 @@ class RecordAddon extends Addon {
       selfMute: false,
       selfDeaf: false,
     });
+    await entersState(connection, VoiceConnectionStatus.Ready, READY_TIMEOUT);
 
     // ユーザーの発話ごとに音声を記録する
-    connection.receiver.speaking.on('start', async userId => {
-      const userName = guild.members.cache.get(userId).displayName;
+    connection.receiver.speaking.on('start', async (userId) => {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      const userName = member?.displayName ?? '(不明なユーザー)';
       const userShortName = userName.replace(/　/g, ' ').split(' ')[0];
 
       if (!this.#contexts[userId]) {
@@ -503,14 +506,14 @@ class RecordAddon extends Addon {
 
   /**
    * ユーザーの音声をキャプチャーします。
-   * @param {VoiceConnection} connection
+   * @param {*} connection
    * @param {Object} context
    * @returns {Promise<Object|null>} コンテキスト
    */
   async #capture(connection, context) {
     const { contextId, userId, guildId } = context;
-    const baseName = `${contextId}.pcm`;
-    const pcmFile = `/tmp/${baseName}`;
+    const baseName = `${contextId}.ogg`;
+    const oggFile = `/tmp/${baseName}`;
 
     console.info(`[${this.constructor.name}] キャプチャー開始: User<${userId}> Session<${contextId}>`);
     this.#contexts[userId] = context;
@@ -524,8 +527,8 @@ class RecordAddon extends Addon {
             duration: this.#getSetting(guildId, 'captureTimeout') * 1000,
           },
         }),
-        new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 }),
-        createWriteStream(pcmFile)
+        new OggOpusTransform(),
+        createWriteStream(oggFile)
       );
 
       // キャプチャー終了
@@ -538,11 +541,12 @@ class RecordAddon extends Addon {
         return null;
       }
 
-      // アップロード (pcm)
+      // アップロード (ogg)
       await s3.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
         Key: `${process.env.S3_PREFIX}/${process.env.REDIS_NAMESPACE}/${baseName}`,
-        Body: createReadStream(pcmFile),
+        Body: createReadStream(oggFile),
+        ContentType: 'audio/ogg',
       }));
 
       // コンテキスト保存
@@ -551,7 +555,7 @@ class RecordAddon extends Addon {
         .zAdd(`${process.env.REDIS_NAMESPACE}:contexts`, { score: dayjs(context.start).valueOf(), value: contextId })
         .exec();
 
-      console.info(`[${this.constructor.name}] キャプチャー終了: User<${userId}> Session<${contextId}> --> ${pcmFile}`);
+      console.info(`[${this.constructor.name}] キャプチャー終了: User<${userId}> Session<${contextId}> --> ${oggFile}`);
       return context;
 
     } catch (err) {
@@ -559,7 +563,7 @@ class RecordAddon extends Addon {
       return null;
 
     } finally {
-      await fs.unlink(pcmFile);
+      await fs.rm(oggFile, { force: true });
       delete this.#contexts[userId];
     }
   }
@@ -691,7 +695,7 @@ class RecordAddon extends Addon {
 
   /**
    * Botに任意の文字列を発話させます。
-   * @param {VoiceConnection} connection
+   * @param {*} connection
    * @param {string} text
    * @return {Promise<void>}
    */
