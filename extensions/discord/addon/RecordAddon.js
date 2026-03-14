@@ -21,7 +21,7 @@ dayjs.tz.setDefault('Asia/Tokyo');
 
 const s3 = new S3Client();
 const EXPIRES = 43200;
-const READY_TIMEOUT = 20 * 1000;
+const READY_TIMEOUT = 3 * 1000;
 
 /**
  * 任意のボイスチャンネルの文字起こしと要約を行います。
@@ -169,12 +169,12 @@ class RecordAddon extends Addon {
         const channel = interaction.options.getChannel('channel') ?? interaction.member.voice?.channel;
 
         // 記録開始
-        try {
-          await this.#startRecord(guild, channel);
-          return 'OK';
-        } catch (err) {
-          return err.message;
-        }
+        await interaction.deferReply({ ephemeral: true })
+          .then(() => this.#startRecord(guild, channel))
+          .then(() => interaction.editReply('OK'))
+          .catch((err) => interaction.editReply(err.message));
+
+        return null;
       },
 
       /**
@@ -349,9 +349,9 @@ class RecordAddon extends Addon {
           }
 
           // Botの退出に合わせて自動要約する
-          if (isBot && isExited) {
+          const connectionContext = RecordAddon.#connectionContexts[botId];
+          if (isBot && isExited && connectionContext) {
             // コネクション破棄
-            const connectionContext = RecordAddon.#connectionContexts[botId];
             connectionContext.connection.destroy();
             delete RecordAddon.#connectionContexts[botId];
             console.info(`[${this.constructor.name}] Botがコネクションを破棄しました。`);
@@ -430,7 +430,7 @@ class RecordAddon extends Addon {
     }
 
     // アイドルクライアント取得
-    const targetClient = RecordAddon.#poolClient();
+    const targetClient = await this.#resolveRecordClient();
     if (!targetClient) {
       console.warn(`[${this.constructor.name}] Bot参加失敗: Botプール不足`);
       throw new Error('ボイスチャンネルに参加できるBotがいません。');
@@ -438,7 +438,6 @@ class RecordAddon extends Addon {
 
     // Botをボイスチャンネルに参加させる
     const botId = targetClient?.user?.id;
-    await RecordAddon.#connectionContexts[botId]?.connection?.destroy();
 
     const connection = joinVoiceChannel({
       guildId: guild.id,
@@ -471,6 +470,8 @@ class RecordAddon extends Addon {
 
     RecordAddon.#connectionContexts[botId] = {
       connection: connection,
+      guildId: guild.id,
+      channelId: channel.id,
       start: dayjs().tz(),
       type: type,
     };
@@ -813,6 +814,43 @@ class RecordAddon extends Addon {
     };
 
     return settings[key] ?? defaultSettings[key];
+  }
+
+  /**
+   * 音声記録のBotを1つ確保します。
+   * @returns {Promise<Client|null>}
+   */
+  async #resolveRecordClient() {
+    // 空いているBotがあれば即利用する
+    const idleClient = RecordAddon.#poolClient();
+    if (idleClient) {
+      return idleClient;
+    }
+
+    // 最も古いBotを強制的に切断して再利用する
+    const oldestConnection = Object.entries(RecordAddon.#connectionContexts)
+      .map(([botId, context]) => ({ botId, context }))
+      .sort((a, b) => a.context.start.valueOf() - b.context.start.valueOf())[0] ?? null;
+
+    if (!oldestConnection) {
+      return null;
+    }
+
+    const targetClient = RecordAddon.#clients.find(client => client.user.id === oldestConnection.botId) ?? null;
+    const guild = targetClient?.guilds.cache.get(oldestConnection.context.guildId);
+    const channel = oldestConnection.context.channelId ? guild?.channels.cache.get(oldestConnection.context.channelId) : null;
+
+    if (!channel) {
+      return null;
+    }
+
+    console.info(`[${this.constructor.name}] <${channel.name}> の記録を強制中止してBotを再利用します。`);
+    this.#endRecord(guild, channel)
+
+    // 切断後待機
+    await setTimeout(READY_TIMEOUT);
+
+    return targetClient;
   }
 
   /**
