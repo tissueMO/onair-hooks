@@ -21,6 +21,7 @@
   },
   "scripts": {
     "dev": "yarn && node index.js",
+    "start": "node index.js",
     "build": " tar --exclude 'node_modules' --exclude '.env*' --exclude 'config.example.js' --exclude '.gitignore' --exclude 'docker-compose.yml' -cvf ../onair-hooks-discord-extension.tar .",
     "convert": "node worker.js --worker convert --once",
     "transcribe": "node worker.js --worker transcribe --once",

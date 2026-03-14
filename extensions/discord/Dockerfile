@@ -16,4 +16,4 @@ WORKDIR /app
 COPY . .
 RUN yarn
 
-CMD ["yarn", "dev"]
+CMD ["node", "index.js"]

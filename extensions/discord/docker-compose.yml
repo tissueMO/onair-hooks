@@ -6,6 +6,7 @@ services:
   app:
     build: .
     tty: true
+    init: true
     depends_on:
       - redis
     volumes:

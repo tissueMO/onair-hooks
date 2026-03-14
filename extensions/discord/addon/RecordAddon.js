@@ -38,6 +38,17 @@ class RecordAddon extends Addon {
   static #connectionContexts;
 
   /**
+   * 音声チャンネルに参加中のBotをすべて破棄します。
+   * @returns {void}
+   */
+  static shutdown() {
+    for (const [botId, context] of Object.entries(RecordAddon.#connectionContexts ?? {})) {
+      context.connection.destroy();
+      delete RecordAddon.#connectionContexts[botId];
+    }
+  }
+
+  /**
    * @type {RedisClientType}
    */
   #redis;

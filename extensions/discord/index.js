@@ -1,6 +1,8 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const { RecordAddon, HookAddon, ShuffleAddon, Addon } = require('./addon');
 
+let isShuttingDown = false;
+
 // アドオン定義
 /** @type {(typeof Addon)[]} */
 const addons = [HookAddon, ShuffleAddon, RecordAddon];
@@ -44,13 +46,47 @@ const clients = [process.env.DISCORD_TOKEN_1, process.env.DISCORD_TOKEN_2]
     return client;
   });
 
+/**
+ * Discordクライアントを終了します。
+ * @param {number} code
+ * @param {*?} reason
+ * @returns {Promise<void>}
+ */
+async function shutdown(code, reason = null) {
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+  console.info('Discordクライアント終了処理: 開始');
+
+  if (reason) {
+    console.error(reason);
+  }
+
+  // Botとクライアントの破棄
+  RecordAddon.shutdown();
+
+  await Promise.allSettled(clients.map(client => client.destroy()))
+    .then(results => results
+      .filter(result => result.status === 'rejected')
+      .forEach(result => console.error(result.reason))
+    );
+
+  console.info('Discordクライアント終了処理: 完了');
+  process.exit(code);
+}
+
 // 終了時にログアウト
 process
   .on('SIGINT', async () => {
-    await Promise.all(clients.map(client => client.destroy()));
-    process.exit(1);
+    await shutdown(1);
   })
   .on('SIGTERM', async () => {
-    await Promise.all(clients.map(client => client.destroy()));
-    process.exit(0);
+    await shutdown(0);
+  })
+  .on('uncaughtException', async (error) => {
+    await shutdown(1, error);
+  })
+  .on('unhandledRejection', async (reason) => {
+    await shutdown(1, reason);
   });
