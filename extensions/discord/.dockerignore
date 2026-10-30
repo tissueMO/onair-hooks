@@ -1,5 +1,8 @@
 .env*
 .gitignore
 config.example.js
+config.js
 Dockerfile
 whisper/
+node_modules/
+lambda/.aws-sam/
