@@ -675,10 +675,10 @@
   resolved "https://registry.npmjs.org/@discordjs/util/-/util-1.1.0.tgz"
   integrity sha512-IndcI5hzlNZ7GS96RV3Xw1R2kaDuXEp7tRIy/KlhidpN/BQ1qh1NZt3377dMLTa44xDUNKT7hnXkA/oUAzD/lg==
 
-"@discordjs/voice@^0.19.1":
-  version "0.19.1"
-  resolved "https://registry.npmjs.org/@discordjs/voice/-/voice-0.19.1.tgz"
-  integrity sha512-XYbFVyUBB7zhRvrjREfiWDwio24nEp/vFaVe6u9aBIC5UYuT7HvoMt8LgNfZ5hOyaCW0flFr72pkhUGz+gWw4Q==
+"@discordjs/voice@^0.19.2":
+  version "0.19.2"
+  resolved "https://registry.yarnpkg.com/@discordjs/voice/-/voice-0.19.2.tgz#0321d78583fcf036079220e64923e6896fbbab99"
+  integrity sha512-3yJ255e4ag3wfZu/DSxeOZK1UtnqNxnspmLaQetGT0pDkThNZoHs+Zg6dgZZ19JEVomXygvfHn9lNpICZuYtEA==
   dependencies:
     "@snazzah/davey" "^0.1.9"
     "@types/ws" "^8.18.1"
