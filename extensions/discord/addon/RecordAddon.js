@@ -556,7 +556,7 @@ class RecordAddon extends Addon {
       // アップロード (ogg)
       await s3.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
-        Key: `${process.env.S3_PREFIX}/${process.env.REDIS_NAMESPACE}/${baseName}`,
+        Key: `${process.env.S3_PREFIX}/${baseName}`,
         Body: createReadStream(oggFile),
         ContentType: 'audio/ogg',
       }));
