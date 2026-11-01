@@ -44,11 +44,19 @@ jobs:
       - build
     steps:
       - name: Trigger Webhooks
+        env:
+          WEBHOOK_URLS: ${{ secrets.WEBHOOK_URLS }}
         run: |
-          curl -X POST -H 'Content-Type: application-json' ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          jq -r '.[]' <<< "$WEBHOOK_URLS" | while IFS= read -r url; do
+            curl --fail-with-body --silent --show-error --request POST \
+              --header 'Content-Type: application/json' "$url"
+          done
 
   deploy-functions:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     needs:
       - build
     steps:
@@ -57,6 +65,12 @@ jobs:
 
       - name: Build deployment image
         run: docker build --target deploy --tag onair-hooks-deploy extensions/discord
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-1
 
       - name: Environment Variables
         run: |
@@ -67,11 +81,13 @@ jobs:
             echo "SECURITY_GROUP_IDS=${{ secrets.SECURITY_GROUP_IDS }}"
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
             echo "REDIS_HOST=${{ secrets.REDIS_HOST }}"
-            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}"
-            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}"
             echo "AWS_REGION=ap-northeast-1"
           } > .env
 
       - name: Build and Deploy
         run: |
-          docker run --rm --env-file .env onair-hooks-deploy
+          docker run --rm --env-file .env \
+            --env AWS_ACCESS_KEY_ID \
+            --env AWS_SECRET_ACCESS_KEY \
+            --env AWS_SESSION_TOKEN \
+            onair-hooks-deploy
