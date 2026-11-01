@@ -11,6 +11,7 @@ sam package \
   --s3-prefix "$S3_PREFIX"
 
 sam deploy \
+  --no-fail-on-empty-changeset \
   --region ap-northeast-1 \
   --capabilities CAPABILITY_IAM \
   --stack-name onair-hooks \
